@@ -1,0 +1,90 @@
+package com.ftn.sbnz.model;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class SynergyPair {
+    private int id;
+    private Node node1;
+    private Node node2;
+    private int distance;
+    private int score;
+    private List<Node> checkPoints;
+
+    public SynergyPair() {
+        this.checkPoints = new ArrayList<>();
+    }
+
+    public SynergyPair(int id, Node node1, Node node2, int distance, int score) {
+        this();
+        this.id = id;
+        this.node1 = node1;
+        this.node2 = node2;
+        this.distance = distance;
+        this.score = score;
+    }
+
+    // Getters and Setters
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public Node getNode1() {
+        return node1;
+    }
+
+    public void setNode1(Node node1) {
+        this.node1 = node1;
+    }
+
+    public Node getNode2() {
+        return node2;
+    }
+
+    public void setNode2(Node node2) {
+        this.node2 = node2;
+    }
+
+    public int getDistance() {
+        return distance;
+    }
+
+    public void setDistance(int distance) {
+        this.distance = distance;
+    }
+
+    public int getScore() {
+        return score;
+    }
+
+    public void setScore(int score) {
+        this.score = score;
+    }
+
+    public List<Node> getCheckPoints() {
+        return checkPoints;
+    }
+
+    public void setCheckPoints(List<Node> checkPoints) {
+        this.checkPoints = checkPoints;
+    }
+
+    public void addCheckPoint(Node node) {
+        this.checkPoints.add(node);
+    }
+
+    @Override
+    public String toString() {
+        return "SynergyPair{" +
+                "id=" + id +
+                ", node1=" + node1.getId() +
+                ", node2=" + node2.getId() +
+                ", distance=" + distance +
+                ", score=" + score +
+                '}';
+    }
+}

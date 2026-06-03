@@ -1,0 +1,57 @@
+package com.ftn.sbnz.kjar;
+
+import org.kie.api.KieServices;
+import org.kie.api.builder.KieBuilder;
+import org.kie.api.builder.Message;
+import org.kie.api.builder.Results;
+import org.kie.api.runtime.KieContainer;
+import org.kie.api.runtime.KieSession;
+
+import com.ftn.sbnz.model.Hexagon;
+import com.ftn.sbnz.model.Node;
+
+import java.util.List;
+
+public class RuleRunner {
+    public static void main(String[] args) {
+        try {
+            KieServices ks = KieServices.Factory.get();
+            var kfs = ks.newKieFileSystem();
+            kfs.write("src/main/resources/rules/board/node-scoring.drl",
+                    ks.getResources().newClassPathResource("rules/board/node-scoring.drl", RuleRunner.class));
+
+            KieBuilder kb = ks.newKieBuilder(kfs);
+            kb.buildAll();
+            Results results = kb.getResults();
+            if (results != null && results.hasMessages(Message.Level.ERROR)) {
+                System.err.println("KieBuilder errors: " + results.getMessages());
+                return;
+            }
+
+            KieContainer kc = ks.newKieContainer(ks.getRepository().getDefaultReleaseId());
+            KieSession ksession = kc.newKieSession();
+
+            List<List<Hexagon>> board = com.ftn.sbnz.model.BoardGenerator.generateBoard();
+            // print board for visual verification
+            com.ftn.sbnz.model.BoardPrinter.printBoard(board);
+            List<Node> nodes = com.ftn.sbnz.model.BoardGenerator.generateNodes(board);
+
+            System.out.println("Nodes before rules:");
+            for (Node n : nodes) System.out.println(n);
+
+            for (Node n : nodes) ksession.insert(n);
+            ksession.fireAllRules();
+
+            System.out.println("\nNodes after rules:");
+            for (Node n : nodes) System.out.println(n);
+
+            System.out.println("\nBest candidates:");
+            java.util.Collection<?> bests = ksession.getObjects(o -> o instanceof com.ftn.sbnz.kjar.BestNode);
+            for (Object b : bests) System.out.println(b);
+
+            ksession.dispose();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
