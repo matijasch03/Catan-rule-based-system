@@ -1,0 +1,28 @@
+package rules.board
+
+import com.ftn.sbnz.model.Node;
+import com.ftn.sbnz.model.Hexagon;
+import com.ftn.sbnz.model.Resource;
+
+template header
+resource
+weight
+
+template "Resursni Prioritet"
+
+rule "Resource Priority @{resource}"
+salience 3
+no-loop true
+when
+    $n : Node( $currentScore : score, $hexes : adjacentHexagons )
+    $h : Hexagon( field == Resource.@{resource} ) from $hexes
+then
+    int bonus = (int) Math.round($currentScore * @{weight});
+    int newScore = Math.max(1, $currentScore + bonus);
+    modify($n) { 
+        setScore(newScore) 
+    };
+    System.out.println("[Resursni Prioritet] Cvor " + $n.getId() + " ima @{resource} (weight=@{weight}) - Score: " + $currentScore + " -> " + newScore);
+end
+
+end template
