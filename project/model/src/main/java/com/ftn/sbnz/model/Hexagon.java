@@ -1,30 +1,53 @@
 package com.ftn.sbnz.model;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+
+@Entity
 public class Hexagon {
+    @Id
+    @GeneratedValue(strategy = jakarta.persistence.GenerationType.IDENTITY)
     private int id;
     private int q;
     private int r;
+
+    @Enumerated(EnumType.STRING)
     private Resource field;
+
     private int dots;
+
+    @ManyToMany
+    @JoinTable(joinColumns = @JoinColumn(name = "hex_id"),
+    inverseJoinColumns = @JoinColumn(name = "node_id"))
+    private List<Node> nodes;
 
     public Hexagon() {
     }
 
-    public Hexagon(int id, int q, int r, Resource field, int dots) {
-        this.id = id;
+    public Hexagon(int q, int r, Resource field, int dots, List<Node> nodes) {
         this.q = q;
         this.r = r;
         this.field = field;
         this.dots = dots;
+        if (nodes != null) {
+            this.nodes = nodes;
+        } else {
+            this.nodes = new ArrayList<>();
+        }
     }
 
     // Getters and Setters
     public int getId() {
         return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
     }
 
     public int getQ() {

@@ -1,10 +1,24 @@
 package com.ftn.sbnz.model;
 
+import jakarta.persistence.*;
+
+@Entity
 public class Advice {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
     private String description;
+
+    @ManyToOne
+    @JoinColumn(name = "player_id", referencedColumnName = "id")
     private Player player;
+
+    @ManyToOne
+    @JoinColumn(name = "synergy_pair_id")
     private SynergyPair longestRoad;
+
+    @ManyToOne
+    @JoinColumn(name = "target_node_id", referencedColumnName = "id")
     private Node targetNode;
     private int success;
 
@@ -22,10 +36,6 @@ public class Advice {
     // Getters and Setters
     public int getId() {
         return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
     }
 
     public String getDescription() {

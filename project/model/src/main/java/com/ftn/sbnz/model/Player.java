@@ -3,9 +3,23 @@ package com.ftn.sbnz.model;
 import java.util.HashMap;
 import java.util.Map;
 
+import jakarta.persistence.*;
+@Entity
 public class Player {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
+
     private int score;
+
+    @ElementCollection
+    @CollectionTable(
+        name = "player_resources",
+        joinColumns = @JoinColumn(name = "player_id")
+    )
+    @MapKeyEnumerated(EnumType.STRING)
+    @Column(name = "resource_count")
     private Map<Resource, Integer> resources;
 
     public Player() {
@@ -21,10 +35,6 @@ public class Player {
     // Getters and Setters
     public int getId() {
         return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
     }
 
     public int getScore() {

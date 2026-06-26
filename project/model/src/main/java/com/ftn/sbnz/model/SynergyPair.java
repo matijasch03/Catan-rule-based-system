@@ -3,14 +3,41 @@ package com.ftn.sbnz.model;
 import java.util.ArrayList;
 import java.util.List;
 
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.ManyToOne;
+
+@Entity
 public class SynergyPair {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
+
+    @ManyToOne
+    @JoinColumn(name = "node1_id")
     private Node node1;
+
+    @ManyToOne
+    @JoinColumn(name = "node2_id")
     private Node node2;
+
     private int distance;
     private int score;
+
+    @ManyToMany
+    @JoinTable(
+        name = "synergy_pair_checkpoints",
+        joinColumns = @JoinColumn(name = "synergy_pair_id"),
+        inverseJoinColumns = @JoinColumn(name = "node_id")
+    )
     private List<Node> checkPoints;
 
+    
     public SynergyPair() {
         this.checkPoints = new ArrayList<>();
     }
@@ -29,9 +56,6 @@ public class SynergyPair {
         return id;
     }
 
-    public void setId(int id) {
-        this.id = id;
-    }
 
     public Node getNode1() {
         return node1;

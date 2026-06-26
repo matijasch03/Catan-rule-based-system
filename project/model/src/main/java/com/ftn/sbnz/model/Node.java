@@ -3,30 +3,36 @@ package com.ftn.sbnz.model;
 import java.util.ArrayList;
 import java.util.List;
 
+import jakarta.persistence.*;
+
+@Entity
 public class Node {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
+
+    @ManyToMany(mappedBy = "nodes")
     private List<Hexagon> adjacentHexagons;
+
+    @Enumerated(EnumType.STRING)
     private NodeOrientation orientation;
+
+    @ManyToOne
+    @JoinColumn(name = "player_id", referencedColumnName = "id")
     private Player owner;
+
+    @Enumerated(EnumType.STRING)
     private Settlement settlement;
+
     private int score;
 
     public Node() {
         this.adjacentHexagons = new ArrayList<>();
     }
 
-    public Node(int id) {
-        this();
-        this.id = id;
-    }
-
     // Getters and Setters
     public int getId() {
         return id;
-    }
-
-    public void setId(int id) {
-        this.id = id;
     }
 
     public List<Hexagon> getAdjacentHexagons() {
