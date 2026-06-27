@@ -30,6 +30,11 @@ public class Node {
         this.adjacentHexagons = new ArrayList<>();
     }
 
+    public Node(int id) {
+        this();
+        this.id = id;
+    }
+
     // Getters and Setters
     public int getId() {
         return id;
