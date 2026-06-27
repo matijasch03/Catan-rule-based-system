@@ -2,8 +2,6 @@ package com.ftn.sbnz.model;
 
 import java.util.Objects;
 
-import org.springframework.jmx.export.annotation.ManagedNotification;
-
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
