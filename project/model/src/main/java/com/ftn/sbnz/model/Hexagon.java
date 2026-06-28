@@ -84,6 +84,21 @@ public class Hexagon {
         }
     }
 
+    public List<Node> getNodes() {
+        if (nodes == null) {
+            nodes = new ArrayList<>();
+        }
+        return nodes;
+    }
+ 
+    public void setNodes(List<Node> nodes) {
+        this.nodes = nodes;
+    }
+ 
+    public void addNode(Node node) {
+        getNodes().add(node);
+    }
+
     @Override
     public String toString() {
         return "Hexagon{" +
