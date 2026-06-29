@@ -26,8 +26,11 @@ public class Hexagon {
     private int dots;
 
     @ManyToMany
-    @JoinTable(joinColumns = @JoinColumn(name = "hex_id"),
-    inverseJoinColumns = @JoinColumn(name = "node_id"))
+    @JoinTable(
+        name = "hexagon_adjacent_nodes",
+        joinColumns = @JoinColumn(name = "hexagon_id"),
+        inverseJoinColumns = @JoinColumn(name = "node_id")
+    )
     private List<Node> nodes;
 
     public Hexagon() {

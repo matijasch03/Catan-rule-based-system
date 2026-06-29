@@ -14,6 +14,10 @@ public class Node {
     @ManyToMany(mappedBy = "nodes")
     private List<Hexagon> adjacentHexagons;
 
+    @ManyToOne
+    @JoinColumn(name = "hexagon_id")
+    private Hexagon possessiveHexagon;
+
     @Enumerated(EnumType.STRING)
     private NodeOrientation orientation;
 
@@ -45,6 +49,14 @@ public class Node {
 
     public void addAdjacentHexagon(Hexagon hexagon) {
         this.adjacentHexagons.add(hexagon);
+    }
+
+    public Hexagon getPossessiveHexagon() {
+        return possessiveHexagon;
+    }
+
+    public void setPossessiveHexagon(Hexagon possessiveHexagon) {
+        this.possessiveHexagon = possessiveHexagon;
     }
 
     public NodeOrientation getOrientation() {
