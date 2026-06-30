@@ -16,9 +16,19 @@ const ICON_BY_LABEL = Object.fromEntries(
   Object.values(RESOURCE).map((r) => [r.label, r.icon])
 );
 
+// Card accent colour keyed by resource display name.
+const CARD_COLOR_BY_LABEL = {
+  Wood: "#2f6b32",
+  Wool: "#7cb342",
+  Grain: "#e3b505",
+  Brick: "#c1532a",
+  Ore: "#7d8a96",
+};
+
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
 const playersEl = document.getElementById("players");
+const handCardsEl = document.getElementById("hand-cards");
 const reloadBtn = document.getElementById("reload-btn");
 const newGameBtn = document.getElementById("newgame-btn");
 
@@ -233,6 +243,42 @@ function renderPanel() {
   });
 }
 
+// Big resource cards for the human player's hand (one card per resource unit).
+function renderHand() {
+  handCardsEl.innerHTML = "";
+  const you = game && game.players ? game.players[game.players.length - 1] : null;
+  const tally = (you && you.resources) || {};
+  const cards = [];
+  for (const [label, count] of Object.entries(tally)) {
+    for (let i = 0; i < count; i++) cards.push(label);
+  }
+  if (!cards.length) {
+    const empty = document.createElement("p");
+    empty.className = "hand-empty";
+    empty.textContent = "No cards yet \u2013 you draw resources from your second village.";
+    handCardsEl.appendChild(empty);
+    return;
+  }
+  for (const label of cards) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.setProperty("--card-accent", CARD_COLOR_BY_LABEL[label] || "#7f99ab");
+    card.title = label;
+
+    const icon = document.createElement("span");
+    icon.className = "card-icon";
+    icon.textContent = ICON_BY_LABEL[label] || "?";
+    card.appendChild(icon);
+
+    const name = document.createElement("span");
+    name.className = "card-name";
+    name.textContent = label;
+    card.appendChild(name);
+
+    handCardsEl.appendChild(card);
+  }
+}
+
 function setStatus(text) {
   statusEl.textContent = text;
 }
@@ -244,6 +290,7 @@ function draw(hexes) {
   if (game) for (const pl of game.players) colorByPlayer[pl.id] = pl.color;
   renderOverlay(size);
   renderPanel();
+  renderHand();
 }
 
 function describePhase() {
