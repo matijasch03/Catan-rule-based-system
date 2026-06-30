@@ -29,7 +29,6 @@ public class BoardGenerator {
 
         Collections.shuffle(tiles);
 
-        int idCounter = 1;
         int tileIndex = 0;
         // Prepare standard Catan number tokens (dots) for 18 non-desert tiles
         List<Integer> tokens = new ArrayList<>();
@@ -58,7 +57,6 @@ public class BoardGenerator {
                 int r = ra;
 
                 Hexagon h = new Hexagon();
-                h.setId(idCounter++);
                 h.setQ(q);
                 h.setR(r);
 
@@ -133,7 +131,7 @@ public class BoardGenerator {
 
                     Node node = nodes.get(key);
                     if (node == null) {
-                        node = new Node(nodeId++);
+                        node = new Node();
                         node.setOrientation(ori);
                         // owner and settlement remain null initially
                         nodes.put(key, node);
