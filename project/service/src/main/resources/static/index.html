@@ -9,12 +9,31 @@
 <body>
     <header>
         <h1>Catan Board</h1>
-        <button id="reload-btn" type="button">Reload</button>
+        <div class="actions">
+            <button id="newgame-btn" type="button">New Game</button>
+            <button id="reload-btn" type="button">Reload</button>
+        </div>
     </header>
 
     <main>
-        <div id="board" class="board"></div>
-        <p id="status" class="status"></p>
+        <div class="board-wrap">
+            <div id="board" class="board"></div>
+        </div>
+
+        <aside class="panel">
+            <h2>Players</h2>
+            <ul id="players" class="players"></ul>
+
+            <h2>Pieces</h2>
+            <ul class="legend">
+                <li><span class="swatch piece-village"></span> Village</li>
+                <li><span class="swatch piece-road"></span> Road</li>
+                <li><span class="swatch piece-town"></span> Town</li>
+            </ul>
+
+            <h2>Turn</h2>
+            <p id="status" class="status"></p>
+        </aside>
     </main>
 
     <script src="app.js"></script>

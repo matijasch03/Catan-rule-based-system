@@ -35,9 +35,12 @@ header h1 {
     letter-spacing: 0.5px;
 }
 
-#reload-btn {
-    background: #e3b505;
-    color: #2a1a00;
+.actions {
+    display: flex;
+    gap: 12px;
+}
+
+header button {
     border: none;
     border-radius: 8px;
     padding: 10px 22px;
@@ -47,25 +50,92 @@ header h1 {
     transition: transform 0.08s ease, filter 0.15s ease;
 }
 
-#reload-btn:hover {
+#newgame-btn {
+    background: #2f8f4e;
+    color: #fff;
+}
+
+#reload-btn {
+    background: #e3b505;
+    color: #2a1a00;
+}
+
+header button:hover {
     filter: brightness(1.08);
 }
 
-#reload-btn:active {
+header button:active {
     transform: translateY(1px);
 }
 
-#reload-btn:disabled {
+header button:disabled {
     opacity: 0.6;
     cursor: default;
 }
 
 main {
     display: flex;
-    flex-direction: column;
-    align-items: center;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 28px;
     padding: 32px 16px;
 }
+
+.board-wrap {
+    flex: 0 0 auto;
+}
+
+.panel {
+    flex: 0 0 240px;
+    background: #0c1822;
+    border: 1px solid #1f3445;
+    border-radius: 12px;
+    padding: 16px 20px;
+}
+
+.panel h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #7f99ab;
+    margin: 18px 0 8px;
+}
+
+.panel h2:first-child {
+    margin-top: 0;
+}
+
+.players, .legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.players li, .legend li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 14px;
+}
+
+.players li.active {
+    font-weight: 700;
+    color: #ffd34d;
+}
+
+.swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: #888;
+    flex: 0 0 auto;
+}
+
+.swatch.piece-village { background: #e8821a; clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%); }
+.swatch.piece-town { background: #e8821a; width: 22px; clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%); }
+.swatch.piece-road { background: #e8821a; height: 6px; border-radius: 3px; }
 
 .board {
     position: relative;
@@ -133,8 +203,77 @@ main {
 }
 
 .status {
-    margin-top: 20px;
+    margin: 0;
     min-height: 18px;
-    color: #9fb6c7;
+    color: #cddae5;
     font-size: 14px;
+    line-height: 1.5;
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+.overlay .edge,
+.overlay .node,
+.overlay .road,
+.overlay .piece {
+    pointer-events: auto;
+}
+
+.overlay .edge {
+    stroke: #1c4e6b;
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: stroke 0.1s ease, stroke-width 0.1s ease;
+}
+
+.overlay .edge:hover {
+    stroke: #0c2c3e;
+    stroke-width: 5;
+}
+
+.overlay .edge-selectable {
+    stroke: #ffd34d;
+    stroke-width: 5;
+    cursor: pointer;
+}
+
+.overlay .edge-selectable:hover {
+    stroke: #fff;
+    stroke-width: 7;
+}
+
+.overlay .road {
+    stroke-width: 7;
+    stroke-linecap: round;
+}
+
+.overlay .node {
+    fill: rgba(255, 255, 255, 0.55);
+    stroke: #0c2c3e;
+    stroke-width: 1.5;
+    transition: r 0.1s ease, fill 0.1s ease;
+}
+
+.overlay .node-pick {
+    cursor: pointer;
+}
+
+.overlay .node-pick:hover {
+    r: 10;
+    fill: #ffd34d;
+}
+
+.overlay .node-selected {
+    fill: #ffd34d;
+    r: 9;
+}
+
+.overlay .piece {
+    stroke: #08131c;
+    stroke-width: 1.5;
 }
