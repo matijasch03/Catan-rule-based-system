@@ -1,0 +1,140 @@
+:root {
+    --hex-size: 62px;
+    --sea: #2a6f97;
+    --wood: #2f6b32;
+    --wool: #7cb342;
+    --grain: #e3b505;
+    --brick: #c1532a;
+    --ore: #7d8a96;
+    --desert: #d8c188;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: #11202e;
+    color: #eef3f7;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    background: #0c1822;
+    border-bottom: 1px solid #1f3445;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+}
+
+#reload-btn {
+    background: #e3b505;
+    color: #2a1a00;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 22px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.08s ease, filter 0.15s ease;
+}
+
+#reload-btn:hover {
+    filter: brightness(1.08);
+}
+
+#reload-btn:active {
+    transform: translateY(1px);
+}
+
+#reload-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+}
+
+.board {
+    position: relative;
+    background: var(--sea);
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.hex {
+    position: absolute;
+    width: calc(var(--hex-size) * 1.732);
+    height: calc(var(--hex-size) * 2);
+    transform: translate(-50%, -50%);
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    user-select: none;
+}
+
+.hex .icon {
+    font-size: 26px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+
+.hex.field-WOOD { background: var(--wood); }
+.hex.field-WOOL { background: var(--wool); }
+.hex.field-GRAIN { background: var(--grain); }
+.hex.field-BRICK { background: var(--brick); }
+.hex.field-ORE { background: var(--ore); }
+.hex.field-DESERT { background: var(--desert); }
+
+.token {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #f4ecd6;
+    color: #1b1b1b;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.token .number {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.token.hot .number {
+    color: #c0392b;
+}
+
+.token .pips {
+    margin-top: 2px;
+    font-size: 7px;
+    letter-spacing: 1px;
+    line-height: 1;
+    color: #555;
+}
+
+.status {
+    margin-top: 20px;
+    min-height: 18px;
+    color: #9fb6c7;
+    font-size: 14px;
+}

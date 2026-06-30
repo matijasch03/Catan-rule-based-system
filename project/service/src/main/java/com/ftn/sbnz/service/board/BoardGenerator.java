@@ -56,6 +56,14 @@ public class BoardGenerator implements CommandLineRunner {
         }
     }
 
+    // Reshuffle the persisted board on demand (e.g. from the Reload button),
+    // returning the hexagons sorted by id.
+    public List<Hexagon> reshuffle() {
+        List<Hexagon> hexagons = hexagonService.getAll();
+        reshuffle(hexagons);
+        return hexagons;
+    }
+
     // Reassign random resources and number tokens to the existing hexagons,
     // leaving their ids/coordinates and all nodes unchanged.
     private void reshuffle(List<Hexagon> hexagons) {
