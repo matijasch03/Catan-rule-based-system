@@ -165,7 +165,8 @@ public class BoardGenerator implements CommandLineRunner {
             Hexagon owner = node.getPossessiveHexagon();
             node.setAdjacentHexagons(new ArrayList<Hexagon>());
             node.addAdjacentHexagon(owner);
-
+            owner.addNode(node);
+             
             for (int[] offset : neighbourOffsets(node.getOrientation())) {
                 Hexagon neighbour = byCoord.get(coordKey(owner.getQ() + offset[0], owner.getR() + offset[1]));
                 if (neighbour != null && !node.getAdjacentHexagons().contains(neighbour)) {
@@ -186,12 +187,11 @@ public class BoardGenerator implements CommandLineRunner {
     // orientation, as axial offsets relative to the owning hexagon.
     private int[][] neighbourOffsets(NodeOrientation orientation) {
         return switch (orientation) {
-            case N -> new int[][]{{-1, 0}, {0, -1}};
-            case NE -> new int[][]{{0, -1}, {1, -1}};
-            case SE -> new int[][]{{1, -1}, {1, 0}};
-            case S -> new int[][]{{1, 0}, {0, 1}};
-            case SW -> new int[][]{{0, 1}, {-1, 1}};
-            case NW -> new int[][]{{-1, 1}, {-1, 0}};
+            case N -> new int[][]{{-1, 1}, {0, 1}};
+            case NE -> new int[][]{{0, 1}, {1, 0}};
+            case S -> new int[][]{{1, -1}};
+            case SW -> new int[][]{{-1, 0}};
+            default -> new int[][]{};
         };
     }
  
@@ -234,12 +234,12 @@ public class BoardGenerator implements CommandLineRunner {
     // match the rest of the codebase rather than a literal compass.
     private double[] cornerOffset(NodeOrientation orientation) {
         return switch (orientation) {
-            case N -> new double[]{-HALF_WIDTH, -0.5};
-            case NE -> new double[]{0.0, -1.0};
-            case SE -> new double[]{HALF_WIDTH, -0.5};
-            case S -> new double[]{HALF_WIDTH, 0.5};
-            case SW -> new double[]{0.0, 1.0};
-            case NW -> new double[]{-HALF_WIDTH, 0.5};
+            case N  -> new double[]{ 0.0,      1.0};
+            case NE -> new double[]{ HALF_WIDTH,  0.5};
+            case SE -> new double[]{ HALF_WIDTH, -0.5};
+            case S  -> new double[]{ 0.0,     -1.0};
+            case SW -> new double[]{-HALF_WIDTH, -0.5};
+            case NW -> new double[]{-HALF_WIDTH,  0.5};
         };
     }
 
