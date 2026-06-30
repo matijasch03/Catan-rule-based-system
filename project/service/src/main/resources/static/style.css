@@ -133,9 +133,17 @@ main {
     flex: 0 0 auto;
 }
 
-.swatch.piece-village { background: #e8821a; clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%); }
-.swatch.piece-town { background: #e8821a; width: 22px; clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%); }
+.swatch.piece-village { background: #e8821a; width: 13px; height: 13px; clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%); }
+.swatch.piece-town { background: #e8821a; width: 26px; height: 26px; clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%); }
 .swatch.piece-road { background: #e8821a; height: 6px; border-radius: 3px; }
+
+.res-tally {
+    margin-left: auto;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: #cde0ef;
+    white-space: nowrap;
+}
 
 .board {
     position: relative;
@@ -276,4 +284,16 @@ main {
 .overlay .piece {
     stroke: #08131c;
     stroke-width: 1.5;
+}
+
+.overlay .res-badge {
+    fill: #fff;
+    stroke: #08131c;
+    stroke-width: 1;
+}
+
+.overlay .res-icon {
+    font-size: 10px;
+    text-anchor: middle;
+    dominant-baseline: central;
 }

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -18,8 +19,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ftn.sbnz.model.Edge;
+import com.ftn.sbnz.model.Hexagon;
 import com.ftn.sbnz.model.Node;
 import com.ftn.sbnz.model.Player;
+import com.ftn.sbnz.model.Resource;
 import com.ftn.sbnz.model.Settlement;
 import com.ftn.sbnz.service.dto.BoardStateDto;
 import com.ftn.sbnz.service.dto.EdgeDto;
@@ -46,6 +49,8 @@ public class GameController {
     private List<Integer> playerIds = new ArrayList<>();
     private Integer currentPlayerId = null;
     private String phase = "IDLE";
+    // Vertices that handed out resources (second villages): nodeId -> resource names.
+    private final Map<Integer, List<String>> resourceNodes = new HashMap<>();
 
     public GameController(NodeService nodeService, EdgeService edgeService, PlayerService playerService) {
         this.nodeService = nodeService;
@@ -58,25 +63,29 @@ public class GameController {
         return buildState();
     }
 
-    // Start a fresh placement round: clear the board, create three players and
-    // auto-place villages + roads for players 1 and 2. Player 3 (the user) is next.
+    // Start a fresh game. Round 1 goes P1, P2, P3: players 1 and 2 are auto-placed,
+    // then the user (player 3) places. Round 2 then runs in reverse order.
     @PostMapping("/new")
     public BoardStateDto newGame() {
         resetBoard();
         createPlayers();
 
-        autoPlace(playerIds.get(0));
-        autoPlace(playerIds.get(1));
+        autoPlace(playerIds.get(0), false);
+        autoPlace(playerIds.get(1), false);
 
         currentPlayerId = playerIds.get(2);
-        phase = "P3_PLACE";
+        phase = "R1_P3";
         return buildState();
     }
 
-    // The user places a village on a free node and a road on a linked edge.
+    // The user places a village on a free node and a road on a linked edge. They do
+    // this twice: once in round 1, then again first in the reverse-order round 2
+    // (where the second village also yields up to three resources).
     @PostMapping("/place")
     public ResponseEntity<?> place(@RequestBody PlaceRequest req) {
-        if (!"P3_PLACE".equals(phase)) {
+        boolean round1 = "R1_P3".equals(phase);
+        boolean round2 = "R2_P3".equals(phase);
+        if (!round1 && !round2) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Not your turn. Start a new game first.");
         }
         Node node = nodeService.getById(req.nodeId).orElse(null);
@@ -99,14 +108,24 @@ public class GameController {
         placeVillage(node, p);
         placeRoad(edge, p);
 
-        phase = "DONE";
-        currentPlayerId = null;
+        if (round1) {
+            // Round 2 starts with the same player (reverse order), so it's still your turn.
+            phase = "R2_P3";
+            currentPlayerId = playerIds.get(2);
+        } else {
+            grantResources(node, p);
+            // Reverse order: after you, players 2 then 1 take their second turn.
+            autoPlace(playerIds.get(1), true);
+            autoPlace(playerIds.get(0), true);
+            phase = "DONE";
+            currentPlayerId = null;
+        }
         return ResponseEntity.ok(buildState());
     }
 
     // ---- placement helpers ----
 
-    private void autoPlace(int playerId) {
+    private void autoPlace(int playerId, boolean grantResources) {
         Player p = playerService.getById(playerId).orElseThrow();
         List<Node> nodes = nodeService.getAll();
         List<Edge> edges = edgeService.getAll();
@@ -122,6 +141,9 @@ public class GameController {
         }
         Node chosen = options.get(random.nextInt(options.size()));
         placeVillage(chosen, p);
+        if (grantResources) {
+            grantResources(chosen, p);
+        }
 
         List<Edge> incident = new ArrayList<>();
         for (Edge e : edges) {
@@ -133,6 +155,22 @@ public class GameController {
         if (!incident.isEmpty()) {
             placeRoad(incident.get(random.nextInt(incident.size())), p);
         }
+    }
+
+    // A second village pays out one resource per adjacent (non-desert) field, so at
+    // most three. Records what was gained on the node for the UI.
+    private void grantResources(Node node, Player player) {
+        List<String> gained = new ArrayList<>();
+        for (Hexagon hex : node.getAdjacentHexagons()) {
+            Resource field = hex.getField();
+            if (field == null || field == Resource.DESERT) {
+                continue;
+            }
+            player.addResource(field, 1);
+            gained.add(field.getDisplayName());
+        }
+        playerService.create(player);
+        resourceNodes.put(node.getId(), gained);
     }
 
     private void placeVillage(Node node, Player player) {
@@ -182,6 +220,7 @@ public class GameController {
             playerService.deleteById(p.getId());
         }
         playerIds.clear();
+        resourceNodes.clear();
     }
 
     private void createPlayers() {
@@ -195,7 +234,12 @@ public class GameController {
     private BoardStateDto buildState() {
         List<NodeDto> nodeDtos = new ArrayList<>();
         for (Node n : nodeService.getAll()) {
-            nodeDtos.add(new NodeDto(n));
+            NodeDto dto = new NodeDto(n);
+            List<String> gained = resourceNodes.get(n.getId());
+            if (gained != null) {
+                dto.setResourcesGained(new ArrayList<>(gained));
+            }
+            nodeDtos.add(dto);
         }
         nodeDtos.sort(Comparator.comparingInt(NodeDto::getId));
 
@@ -207,7 +251,14 @@ public class GameController {
 
         List<PlayerDto> playerDtos = new ArrayList<>();
         for (int i = 0; i < playerIds.size(); i++) {
-            playerDtos.add(new PlayerDto(playerIds.get(i), COLORS[i % COLORS.length]));
+            int pid = playerIds.get(i);
+            Map<String, Integer> resources = new LinkedHashMap<>();
+            playerService.getById(pid).ifPresent(pl -> {
+                if (pl.getResources() != null) {
+                    pl.getResources().forEach((res, count) -> resources.put(res.getDisplayName(), count));
+                }
+            });
+            playerDtos.add(new PlayerDto(pid, COLORS[i % COLORS.length], resources));
         }
 
         return new BoardStateDto(nodeDtos, edgeDtos, playerDtos, currentPlayerId, phase);

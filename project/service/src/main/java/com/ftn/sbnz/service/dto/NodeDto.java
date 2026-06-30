@@ -1,5 +1,8 @@
 package com.ftn.sbnz.service.dto;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.ftn.sbnz.model.Hexagon;
 import com.ftn.sbnz.model.Node;
 import com.ftn.sbnz.model.NodeOrientation;
@@ -18,6 +21,9 @@ public class NodeDto {
     private boolean free;
     private Settlement settlement;
     private Integer ownerId;
+    // Resources gained from this vertex (only set for a second village); UI shows
+    // them next to the piece.
+    private List<String> resourcesGained = new ArrayList<>();
 
     public NodeDto() {
     }
@@ -57,4 +63,6 @@ public class NodeDto {
     public boolean isFree() { return free; }
     public Settlement getSettlement() { return settlement; }
     public Integer getOwnerId() { return ownerId; }
+    public List<String> getResourcesGained() { return resourcesGained; }
+    public void setResourcesGained(List<String> resourcesGained) { this.resourcesGained = resourcesGained; }
 }

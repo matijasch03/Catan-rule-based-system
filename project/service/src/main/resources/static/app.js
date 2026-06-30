@@ -11,6 +11,11 @@ const RESOURCE = {
   DESERT: { icon: "\u{1F3DC}\uFE0F", label: "Desert" },
 };
 
+// Resource icon keyed by its display name (as the backend sends it).
+const ICON_BY_LABEL = Object.fromEntries(
+  Object.values(RESOURCE).map((r) => [r.label, r.icon])
+);
+
 const boardEl = document.getElementById("board");
 const statusEl = document.getElementById("status");
 const playersEl = document.getElementById("players");
@@ -128,7 +133,7 @@ function renderOverlay(size) {
   const nodeById = {};
   for (const n of game.nodes) nodeById[n.id] = n;
 
-  const isUserTurn = game.phase === "P3_PLACE";
+  const isUserTurn = game.phase === "R1_P3" || game.phase === "R2_P3";
 
   // ---- edges (base lines + roads) ----
   for (const e of game.edges) {
@@ -164,11 +169,14 @@ function renderOverlay(size) {
 
     if (n.settlement) {
       const piece = withTitle(svgEl("path", {
-        d: housePath(p.x, p.y, n.settlement === "TOWN" ? 22 : 17),
+        d: housePath(p.x, p.y, n.settlement === "TOWN" ? 30 : 15),
         class: "piece",
         fill: colorByPlayer[n.ownerId] || "#fff",
       }), `Node ${n.id} \u2013 ${n.settlement}`);
       svg.appendChild(piece);
+      if (n.resourcesGained && n.resourcesGained.length) {
+        renderResourceBadges(svg, p.x, p.y, n.resourcesGained);
+      }
       continue;
     }
 
@@ -187,6 +195,21 @@ function renderOverlay(size) {
   boardEl.appendChild(svg);
 }
 
+// Up to three resource icons shown just above a second village.
+function renderResourceBadges(svg, cx, cy, resources) {
+  const gap = 17;
+  const startX = cx - ((resources.length - 1) * gap) / 2;
+  const by = cy - 24;
+  resources.forEach((label, i) => {
+    const x = startX + i * gap;
+    svg.appendChild(svgEl("circle", { cx: x, cy: by, r: 8, class: "res-badge" }));
+    const t = svgEl("text", { x, y: by, class: "res-icon" });
+    t.textContent = ICON_BY_LABEL[label] || "?";
+    withTitle(t, label);
+    svg.appendChild(t);
+  });
+}
+
 function renderPanel() {
   playersEl.innerHTML = "";
   const labels = ["Player 1 (computer)", "Player 2 (computer)", "You (Player 3)"];
@@ -198,6 +221,14 @@ function renderPanel() {
     li.appendChild(sw);
     li.appendChild(document.createTextNode(labels[i] || `Player ${pl.id}`));
     if (game.currentPlayerId === pl.id) li.classList.add("active");
+
+    const res = document.createElement("span");
+    res.className = "res-tally";
+    const entries = Object.entries(pl.resources || {});
+    res.textContent = entries.length
+      ? entries.map(([label, count]) => `${ICON_BY_LABEL[label] || label}${count}`).join(" ")
+      : "\u2013";
+    li.appendChild(res);
     playersEl.appendChild(li);
   });
 }
@@ -218,12 +249,16 @@ function draw(hexes) {
 function describePhase() {
   if (!game || game.phase === "IDLE") {
     setStatus("Press \u201CNew Game\u201D: players 1 and 2 are placed automatically, then it\u2019s your turn.");
-  } else if (game.phase === "P3_PLACE") {
+  } else if (game.phase === "R1_P3") {
     setStatus(selectedNodeId == null
-      ? "Your turn \u2013 click a free spot (circle) to place your village."
+      ? "Round 1 \u2013 click a free spot (circle) to place your village."
       : `Village on node ${selectedNodeId}. Now click one of the highlighted roads next to it.`);
+  } else if (game.phase === "R2_P3") {
+    setStatus(selectedNodeId == null
+      ? "Round 2 (reverse order) \u2013 your turn first. Place a SECOND village; it earns one resource per neighbouring tile."
+      : `Second village on node ${selectedNodeId}. Now click one of the highlighted roads next to it.`);
   } else if (game.phase === "DONE") {
-    setStatus("All three players placed their village and road. Press \u201CNew Game\u201D to play again.");
+    setStatus("Both rounds done \u2013 you collected the resources next to your second village. Press \u201CNew Game\u201D to play again.");
   }
 }
 
