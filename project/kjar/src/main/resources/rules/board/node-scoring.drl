@@ -1,0 +1,164 @@
+package rules.board
+
+import com.ftn.sbnz.model.Node;
+import com.ftn.sbnz.model.Hexagon;
+import com.ftn.sbnz.model.Resource;
+
+function int diceWeight(int dots) {
+    switch (dots) {
+        case 2:
+        case 12:
+            return 1;
+        case 3:
+        case 11:
+            return 2;
+        case 4:
+        case 10:
+            return 3;
+        case 5:
+        case 9:
+            return 4;
+        case 6:
+        case 8:
+            return 5;
+        default:
+            return 0;
+    }
+}
+
+rule "Score node with probability and diversity bonus"
+salience 10
+no-loop true
+when
+    $node : Node( $hexes : adjacentHexagons )
+then
+    int baseScore = 0;
+    java.util.Set<Resource> resources = new java.util.HashSet<Resource>();
+
+    for (Hexagon hex : $node.getAdjacentHexagons()) {
+        baseScore += diceWeight(hex.getDots());
+        if (hex.getField() != null && hex.getField() != Resource.DESERT) {
+            resources.add(hex.getField());
+        }
+    }
+
+    int finalScore = baseScore;
+    if (resources.size() > 2) {
+        finalScore = (int) Math.round(baseScore * 1.2);
+    }
+
+    modify($node) {
+        setScore(finalScore)
+    };
+end
+
+rule "Select top two nodes"
+salience 0
+no-loop true
+when
+    $nodes : java.util.List() from collect( Node( score > 0 ) )
+then
+    if ($nodes == null || $nodes.isEmpty()) return;
+    java.util.List<Node> list = new java.util.ArrayList<Node>($nodes);
+    list.sort((a,b) -> Integer.compare(b.getScore(), a.getScore()));
+    int count = Math.min(2, list.size());
+    for (int i = 0; i < count; i++) {
+        Node n = list.get(i);
+        insert( new com.ftn.sbnz.kjar.BestNode(n.getId(), n.getScore(), i+1) );
+    }
+end
+
+function boolean containsWoodOrBrick(java.util.List hexes) {
+    if (hexes == null) return false;
+    for (Object o : hexes) {
+        if (o instanceof Hexagon) {
+            Hexagon h = (Hexagon) o;
+            if (h.getField() == Resource.WOOD || h.getField() == Resource.BRICK) return true;
+        }
+    }
+    return false;
+}
+
+rule "Wood or Brick bonus"
+salience 5
+no-loop true
+when
+    $node : Node( $hexes : adjacentHexagons )
+    eval( containsWoodOrBrick($hexes) )
+then
+    int newScore = (int) Math.round($node.getScore() * 1.3);
+    modify($node) {
+        setScore(newScore)
+    };
+end
+
+// Pravilo za prioritet resursa [Resursni Prioritet]
+// DRVO (WOOD): weight = 1.5 (50% bonus)
+rule "Resource Priority WOOD"
+salience 3
+no-loop true
+when
+    $node : Node( $hexes : adjacentHexagons, $currentScore : score )
+    $hex : Hexagon( field == Resource.WOOD ) from $hexes
+then
+    int baseBonus = (int) Math.round($currentScore * 0.5);
+    modify($node) {
+        setScore($currentScore + baseBonus)
+    };
+end
+
+// CIGLA (BRICK): weight = 1.5 (50% bonus)
+rule "Resource Priority BRICK"
+salience 3
+no-loop true
+when
+    $node : Node( $hexes : adjacentHexagons, $currentScore : score )
+    $hex : Hexagon( field == Resource.BRICK ) from $hexes
+then
+    int baseBonus = (int) Math.round($currentScore * 0.5);
+    modify($node) {
+        setScore($currentScore + baseBonus)
+    };
+end
+
+// KAMEN (ORE): weight = 0.7 (30% penalty)
+rule "Resource Priority ORE"
+salience 3
+no-loop true
+when
+    $node : Node( $hexes : adjacentHexagons, $currentScore : score )
+    $hex : Hexagon( field == Resource.ORE ) from $hexes
+then
+    int baseBonus = (int) Math.round($currentScore * -0.3);
+    modify($node) {
+        setScore(Math.max(1, $currentScore + baseBonus))
+    };
+end
+
+// ŽITO (GRAIN): weight = 1.1 (10% bonus)
+rule "Resource Priority GRAIN"
+salience 3
+no-loop true
+when
+    $node : Node( $hexes : adjacentHexagons, $currentScore : score )
+    $hex : Hexagon( field == Resource.GRAIN ) from $hexes
+then
+    int baseBonus = (int) Math.round($currentScore * 0.1);
+    modify($node) {
+        setScore($currentScore + baseBonus)
+    };
+end
+
+// OVCA (WOOL): weight = 0.6 (40% penalty)
+rule "Resource Priority WOOL"
+salience 3
+no-loop true
+when
+    $node : Node( $hexes : adjacentHexagons, $currentScore : score )
+    $hex : Hexagon( field == Resource.WOOL ) from $hexes
+then
+    int baseBonus = (int) Math.round($currentScore * -0.4);
+    modify($node) {
+        setScore(Math.max(1, $currentScore + baseBonus))
+    };
+end

@@ -8,7 +8,7 @@ template header
 resource
 weight
 
-template "Resursni Prioritet"
+template "Resource Priority"
 
 rule "Resource Priority @{resource}"
 salience 3
@@ -22,7 +22,7 @@ then
     modify($n) { 
         setScore(newScore) 
     };
-    System.out.println("[Resursni Prioritet] Cvor " + $n.getId() + " ima @{resource} (weight=@{weight}) - Score: " + $currentScore + " -> " + newScore);
+    System.out.println("[Resource Priority] Node " + $n.getId() + " has @{resource} (weight=@{weight}) - Score: " + $currentScore + " -> " + newScore);
 end
 
 end template

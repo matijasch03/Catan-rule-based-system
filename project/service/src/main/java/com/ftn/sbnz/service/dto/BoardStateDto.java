@@ -11,17 +11,25 @@ public class BoardStateDto {
     private List<PlayerDto> players;
     private Integer currentPlayerId;
     private String phase;
+    private int lastDiceSum;
 
     public BoardStateDto() {
     }
 
     public BoardStateDto(List<NodeDto> nodes, List<EdgeDto> edges, List<PlayerDto> players,
-                         Integer currentPlayerId, String phase) {
+                         Integer currentPlayerId, String phase, int lastDiceSum) {
         this.nodes = nodes;
         this.edges = edges;
         this.players = players;
         this.currentPlayerId = currentPlayerId;
         this.phase = phase;
+        this.lastDiceSum = lastDiceSum;
+    }
+    
+    // Overload for backward compatibility
+    public BoardStateDto(List<NodeDto> nodes, List<EdgeDto> edges, List<PlayerDto> players,
+                         Integer currentPlayerId, String phase) {
+        this(nodes, edges, players, currentPlayerId, phase, 0);
     }
 
     public List<NodeDto> getNodes() { return nodes; }
@@ -29,4 +37,5 @@ public class BoardStateDto {
     public List<PlayerDto> getPlayers() { return players; }
     public Integer getCurrentPlayerId() { return currentPlayerId; }
     public String getPhase() { return phase; }
+    public int getLastDiceSum() { return lastDiceSum; }
 }

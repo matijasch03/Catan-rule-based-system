@@ -57,11 +57,16 @@ public class GameController {
     private Integer currentPlayerId = null;
     private String phase = "IDLE";
     private int step = 0;
+    private int currentPlayerTurnIndex = 0;  // Index in playerIds for main game loop
     // When true players 1 and 2 are auto-played by the computer; otherwise the user
     // places for every player.
     private boolean autoOpponents = true;
     // Vertices that handed out resources (second villages): nodeId -> resource names.
     private final Map<Integer, List<String>> resourceNodes = new HashMap<>();
+    // Track resources gained from dice roll (node -> resources gained this turn).
+    private final Map<Integer, List<String>> diceResourceNodes = new HashMap<>();
+    // Track last dice roll result for UI display
+    private int lastDiceSum = 0;
  
     public GameController(NodeService nodeService, EdgeService edgeService, PlayerService playerService) {
         this.nodeService = nodeService;
@@ -102,7 +107,12 @@ public class GameController {
             step++;
         }
         currentPlayerId = null;
-        phase = "DONE";
+        // Transition to main game phase
+        currentPlayerTurnIndex = 0;
+        currentPlayerId = playerIds.get(0);
+        phase = "TURN_P1";
+        // Auto-play opponents' first turn with dice roll if autoOpponents is enabled
+        playTurnWithDiceIfNeeded();
     }
  
     private boolean isHuman(int playerIndex) {
@@ -143,9 +153,114 @@ public class GameController {
         }
         step++;
         advanceToHuman();
+        // If we just transitioned to main game, auto-play opponent turns until human's turn
+        if (step >= STEPS.length) {
+            playTurnWithDiceIfNeeded();
+        }
         return ResponseEntity.ok(buildState());
     }
  
+
+    // ---- main game loop: dice rolls ----
+    
+    // Auto-play computer turns with dice rolls, then prepare for human player
+    private void playTurnWithDiceIfNeeded() {
+        while (step >= STEPS.length && currentPlayerId != null) {
+            if (isHuman(currentPlayerTurnIndex)) {
+                // Roll dice for the human player and wait for their action
+                rollDiceForCurrentPlayer();
+                phase = "TURN_P" + (currentPlayerTurnIndex + 1) + "_ROLLED";
+                return;
+            }
+            // Auto-play opponent turn
+            rollDiceForCurrentPlayer();
+            // TODO: Add AI logic here for opponent actions (building, trading, etc.)
+            advanceToNextPlayer();
+        }
+    }
+    
+    // Roll dice for the current player and distribute resources
+    private void rollDiceForCurrentPlayer() {
+        int dice1 = random.nextInt(6) + 1;
+        int dice2 = random.nextInt(6) + 1;
+        lastDiceSum = dice1 + dice2;
+        
+        if (lastDiceSum == 7) {
+            // Roll again if 7 is rolled (no resources distributed on 7)
+            rollDiceForCurrentPlayer();
+            return;
+        }
+        
+        // Distribute resources to all players with settlements on hexagons matching the dice sum
+        diceResourceNodes.clear();
+        distributeDiceResources(lastDiceSum);
+    }
+    
+    // Endpoint for human to end their turn and advance to next player
+    @PostMapping("/endTurn")
+    public ResponseEntity<?> endTurn() {
+        if (step < STEPS.length) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("Still in placement phase.");
+        }
+        advanceToNextPlayer();
+        playTurnWithDiceIfNeeded();
+        return ResponseEntity.ok(buildState());
+    }
+
+
+    
+    // Distribute resources based on dice roll
+    private void distributeDiceResources(int diceSum) {
+        Set<Integer> processedHexIds = new HashSet<>();
+        
+        for (Hexagon hex : getHexagonsWithDots(diceSum)) {
+            if (processedHexIds.contains(hex.getId())) continue;
+            processedHexIds.add(hex.getId());
+            
+            Resource field = hex.getField();
+            if (field == null || field == Resource.DESERT) continue;
+            
+            // Find all settlements on this hexagon and give resources
+            for (Node node : nodeService.getAll()) {
+                if (node.getSettlement() != null && node.getOwner() != null) {
+                    boolean isOnHex = node.getAdjacentHexagons().stream()
+                            .anyMatch(h -> h.getId() == hex.getId());
+                    
+                    if (isOnHex) {
+                        Player owner = node.getOwner();
+                        owner.addResource(field, 1);
+                        playerService.create(owner);
+                        
+                        // Track for UI display
+                        List<String> gained = diceResourceNodes.getOrDefault(node.getId(), new ArrayList<>());
+                        gained.add(field.getDisplayName());
+                        diceResourceNodes.put(node.getId(), gained);
+                    }
+                }
+            }
+        }
+    }
+    
+    // Get all hexagons with specific dot number
+    private List<Hexagon> getHexagonsWithDots(int dots) {
+        // We need to get all hexagons - for now, get them from all nodes' adjacent hexagons
+        Set<Hexagon> hexSet = new HashSet<>();
+        for (Node n : nodeService.getAll()) {
+            for (Hexagon h : n.getAdjacentHexagons()) {
+                if (h.getDots() == dots) {
+                    hexSet.add(h);
+                }
+            }
+        }
+        return new ArrayList<>(hexSet);
+    }
+    
+    // Advance to the next player's turn
+    private void advanceToNextPlayer() {
+        currentPlayerTurnIndex = (currentPlayerTurnIndex + 1) % playerIds.size();
+        currentPlayerId = playerIds.get(currentPlayerTurnIndex);
+        phase = "TURN_P" + (currentPlayerTurnIndex + 1);
+    }
 
     // ---- placement helpers ----
 
@@ -200,12 +315,12 @@ public class GameController {
     private void placeVillage(Node node, Player player) {
         node.setSettlement(Settlement.VILLAGE);
         node.setOwner(player);
-        nodeService.create(node);
+        nodeService.updateById(node.getId(), node);
     }
 
     private void placeRoad(Edge edge, Player player) {
         edge.setOwner(player);
-        edgeService.create(edge);
+        edgeService.updateById(edge.getId(), edge);
     }
 
     // A node may hold a village if it is empty and none of its edge-neighbours
@@ -245,6 +360,8 @@ public class GameController {
         }
         playerIds.clear();
         resourceNodes.clear();
+        diceResourceNodes.clear();
+        lastDiceSum = 0;
     }
 
     private void createPlayers() {
@@ -263,6 +380,15 @@ public class GameController {
             if (gained != null) {
                 dto.setResourcesGained(new ArrayList<>(gained));
             }
+                // Also include resources from current dice roll
+                List<String> diceGained = diceResourceNodes.get(n.getId());
+                if (diceGained != null) {
+                    if (gained == null) {
+                        gained = new ArrayList<>();
+                        dto.setResourcesGained(gained);
+                    }
+                    gained.addAll(diceGained);
+                }
             nodeDtos.add(dto);
         }
         nodeDtos.sort(Comparator.comparingInt(NodeDto::getId));
@@ -285,7 +411,7 @@ public class GameController {
             playerDtos.add(new PlayerDto(pid, COLORS[i % COLORS.length], resources));
         }
 
-        return new BoardStateDto(nodeDtos, edgeDtos, playerDtos, currentPlayerId, phase);
+        return new BoardStateDto(nodeDtos, edgeDtos, playerDtos, currentPlayerId, phase, lastDiceSum);
     }
 
     public static class PlaceRequest {

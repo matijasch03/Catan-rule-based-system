@@ -19,6 +19,8 @@ public class RuleRunner {
             var kfs = ks.newKieFileSystem();
             kfs.write("src/main/resources/rules/board/node-scoring.drl",
                     ks.getResources().newClassPathResource("rules/board/node-scoring.drl", RuleRunner.class));
+            kfs.write("src/main/resources/rules/board/resource_priority.drl",
+                    ks.getResources().newClassPathResource("rules/board/resource_priority.drt", RuleRunner.class));
 
             KieBuilder kb = ks.newKieBuilder(kfs);
             kb.buildAll();
