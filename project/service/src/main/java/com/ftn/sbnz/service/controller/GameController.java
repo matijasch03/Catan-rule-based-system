@@ -25,6 +25,7 @@ import com.ftn.sbnz.model.Player;
 import com.ftn.sbnz.model.Resource;
 import com.ftn.sbnz.model.Settlement;
 import com.ftn.sbnz.service.dto.BoardStateDto;
+import com.ftn.sbnz.service.dto.DiceRollDto;
 import com.ftn.sbnz.service.dto.EdgeDto;
 import com.ftn.sbnz.service.dto.NodeDto;
 import com.ftn.sbnz.service.dto.PlayerDto;
@@ -67,6 +68,8 @@ public class GameController {
     private final Map<Integer, List<String>> diceResourceNodes = new HashMap<>();
     // Track last dice roll result for UI display
     private int lastDiceSum = 0;
+    // Keep one complete P1-P2-P3 cycle so the UI can show computer rolls too.
+    private final List<DiceRollDto> diceRolls = new ArrayList<>();
  
     public GameController(NodeService nodeService, EdgeService edgeService, PlayerService playerService) {
         this.nodeService = nodeService;
@@ -153,10 +156,6 @@ public class GameController {
         }
         step++;
         advanceToHuman();
-        // If we just transitioned to main game, auto-play opponent turns until human's turn
-        if (step >= STEPS.length) {
-            playTurnWithDiceIfNeeded();
-        }
         return ResponseEntity.ok(buildState());
     }
  
@@ -181,14 +180,19 @@ public class GameController {
     
     // Roll dice for the current player and distribute resources
     private void rollDiceForCurrentPlayer() {
-        int dice1 = random.nextInt(6) + 1;
-        int dice2 = random.nextInt(6) + 1;
-        lastDiceSum = dice1 + dice2;
-        
-        if (lastDiceSum == 7) {
-            // Roll again if 7 is rolled (no resources distributed on 7)
-            rollDiceForCurrentPlayer();
-            return;
+        // Keep rolling until we get a number that's not 7
+        int dice1;
+        int dice2;
+        do {
+            dice1 = random.nextInt(6) + 1;
+            dice2 = random.nextInt(6) + 1;
+            lastDiceSum = dice1 + dice2;
+        } while (lastDiceSum == 7);
+
+        diceRolls.add(new DiceRollDto(
+                currentPlayerId, currentPlayerTurnIndex + 1, dice1, dice2));
+        if (diceRolls.size() > playerIds.size()) {
+            diceRolls.remove(0);
         }
         
         // Distribute resources to all players with settlements on hexagons matching the dice sum
@@ -362,6 +366,7 @@ public class GameController {
         resourceNodes.clear();
         diceResourceNodes.clear();
         lastDiceSum = 0;
+        diceRolls.clear();
     }
 
     private void createPlayers() {
@@ -376,19 +381,12 @@ public class GameController {
         List<NodeDto> nodeDtos = new ArrayList<>();
         for (Node n : nodeService.getAll()) {
             NodeDto dto = new NodeDto(n);
-            List<String> gained = resourceNodes.get(n.getId());
-            if (gained != null) {
-                dto.setResourcesGained(new ArrayList<>(gained));
+            List<String> gained = new ArrayList<>();
+            gained.addAll(resourceNodes.getOrDefault(n.getId(), List.of()));
+            gained.addAll(diceResourceNodes.getOrDefault(n.getId(), List.of()));
+            if (!gained.isEmpty()) {
+                dto.setResourcesGained(gained);
             }
-                // Also include resources from current dice roll
-                List<String> diceGained = diceResourceNodes.get(n.getId());
-                if (diceGained != null) {
-                    if (gained == null) {
-                        gained = new ArrayList<>();
-                        dto.setResourcesGained(gained);
-                    }
-                    gained.addAll(diceGained);
-                }
             nodeDtos.add(dto);
         }
         nodeDtos.sort(Comparator.comparingInt(NodeDto::getId));
@@ -411,7 +409,8 @@ public class GameController {
             playerDtos.add(new PlayerDto(pid, COLORS[i % COLORS.length], resources));
         }
 
-        return new BoardStateDto(nodeDtos, edgeDtos, playerDtos, currentPlayerId, phase, lastDiceSum);
+        return new BoardStateDto(nodeDtos, edgeDtos, playerDtos, currentPlayerId, phase,
+                lastDiceSum, new ArrayList<>(diceRolls));
     }
 
     public static class PlaceRequest {

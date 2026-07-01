@@ -31,6 +31,9 @@ const playersEl = document.getElementById("players");
 const handCardsEl = document.getElementById("hand-cards");
 const reloadBtn = document.getElementById("reload-btn");
 const newGameBtn = document.getElementById("newgame-btn");
+const endTurnBtn = document.getElementById("end-turn-btn");
+const dicePanelEl = document.getElementById("dice-panel");
+const diceRollsEl = document.getElementById("dice-rolls");
 
 let layout = null; // { minX, minY, offX, offY }
 let game = null; // last BoardState from the server
@@ -42,7 +45,11 @@ let autoOpponents = true; // whether players 1 & 2 are computer-controlled
 // A human turn is any non-terminal phase: the server auto-resolves computer
 // players within a request and only pauses when it needs the user to place.
 function isHumanTurn() {
-  return game && game.phase !== "IDLE" && game.phase !== "DONE";
+  return parsePhase() !== null;
+}
+
+function isMainTurn() {
+  return game && /^TURN_P\d+_ROLLED$/.test(game.phase || "");
 }
  
 // Parse a phase like "R2_P1" into { round, player } (1-based); null otherwise.
@@ -253,6 +260,34 @@ function renderPanel() {
     li.appendChild(res);
     playersEl.appendChild(li);
   });
+
+  const rolls = (game && game.diceRolls) || [];
+  dicePanelEl.hidden = rolls.length === 0;
+  diceRollsEl.innerHTML = "";
+  for (const roll of rolls) {
+    const item = document.createElement("div");
+    item.className = "dice-roll";
+
+    const player = document.createElement("span");
+    player.className = "dice-player";
+    player.textContent = roll.playerNumber === 3 ? "You" : `Player ${roll.playerNumber}`;
+    item.appendChild(player);
+
+    for (const value of [roll.dieOne, roll.dieTwo]) {
+      const die = document.createElement("span");
+      die.className = "die";
+      die.textContent = value;
+      item.appendChild(die);
+    }
+
+    const sum = document.createElement("strong");
+    sum.className = "dice-sum";
+    sum.textContent = `= ${roll.sum}`;
+    item.appendChild(sum);
+    diceRollsEl.appendChild(item);
+  }
+
+  endTurnBtn.hidden = !isMainTurn();
 }
 
 // Big resource cards for the human player's hand (one card per resource unit).
@@ -267,7 +302,7 @@ function renderHand() {
   if (!cards.length) {
     const empty = document.createElement("p");
     empty.className = "hand-empty";
-    empty.textContent = "No cards yet \u2013 you draw resources from your second village.";
+    empty.textContent = "No cards yet \u2013 matching dice rolls will add them here.";
     handCardsEl.appendChild(empty);
     return;
   }
@@ -316,6 +351,12 @@ function describePhase() {
     setStatus("Both rounds done \u2013 each second village collected the resources next to it. Press \u201CNew Game\u201D to play again.");
     return;
   }
+  if (isMainTurn()) {
+    const playerNumber = Number(/^TURN_P(\d+)_ROLLED$/.exec(game.phase)[1]);
+    const who = playerNumber === 3 ? "You rolled" : `Player ${playerNumber} rolled`;
+    setStatus(`${who} ${game.lastDiceSum}. Resources were given to every village beside a ${game.lastDiceSum} tile.`);
+    return;
+  }
   const info = parsePhase();
   if (!info) return;
   // Whom the user is currently placing for.
@@ -358,6 +399,7 @@ async function refreshAll(hexesPromise) {
 function busy(on) {
   reloadBtn.disabled = on;
   newGameBtn.disabled = on;
+  endTurnBtn.disabled = on;
 }
 
 async function run(fn, msg) {
@@ -416,6 +458,15 @@ reloadBtn.addEventListener("click", () =>
     const hexes = await getJson("/api/board/reshuffle", { method: "POST" });
     await refreshAll(Promise.resolve(hexes));
   }, "Reshuffling\u2026")
+);
+
+endTurnBtn.addEventListener("click", () =>
+  run(async () => {
+    game = await getJson("/api/game/endTurn", { method: "POST" });
+    selectedNodeId = null;
+    draw(lastHexes);
+    describePhase();
+  }, "Playing the next turns\u2026")
 );
 
 run(() => refreshAll(), "Loading board\u2026");
