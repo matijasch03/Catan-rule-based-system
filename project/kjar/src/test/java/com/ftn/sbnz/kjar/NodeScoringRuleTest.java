@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.lang.reflect.Field;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -30,7 +32,7 @@ class NodeScoringRuleTest {
 
         fireRules(node);
 
-        // (5 + 5 + 4) * 1.20, rounded, plus the fixed BigYield bonus 2.
+        // Includes probability, diversity, BigYield and all matching template priorities.
         assertEquals(19, node.getScore());
     }
 
@@ -44,8 +46,8 @@ class NodeScoringRuleTest {
 
         fireRules(node);
 
-        // No diversity bonus: (5 + 5 + 4) plus the fixed BigYield bonus 2.
-        assertEquals(16, node.getScore());
+        // Base 14 + BigYield 2, then WOOD +50% and GRAIN +10%.
+        assertEquals(26, node.getScore());
     }
 
     @Test
@@ -80,6 +82,15 @@ class NodeScoringRuleTest {
             org.kie.api.builder.KieFileSystem kfs = ks.newKieFileSystem();
             kfs.write("src/main/resources/rules/board/node-scoring.drl",
                     ks.getResources().newClassPathResource("rules/board/node-scoring.drl", NodeScoringRuleTest.class));
+            try (InputStream template = NodeScoringRuleTest.class.getClassLoader()
+                    .getResourceAsStream("rules/board/resource_priority.drt");
+                 InputStream data = NodeScoringRuleTest.class.getClassLoader()
+                    .getResourceAsStream("rules/board/resource_priority.data")) {
+                String generated = ResourcePriorityTemplateCompiler.compile(template, data);
+                kfs.write("src/main/resources/rules/board/resource-priority-generated.drl",
+                        ks.getResources().newByteArrayResource(
+                                generated.getBytes(StandardCharsets.UTF_8)));
+            }
             org.kie.api.builder.KieBuilder kb = ks.newKieBuilder(kfs);
             kb.buildAll();
             org.kie.api.builder.Results results = kb.getResults();

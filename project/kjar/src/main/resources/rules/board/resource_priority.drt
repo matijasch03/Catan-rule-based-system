@@ -1,28 +1,31 @@
+template header
+resource
+weight
+priority
+
 package rules.board
 
 import com.ftn.sbnz.model.Node;
 import com.ftn.sbnz.model.Hexagon;
 import com.ftn.sbnz.model.Resource;
 
-template header
-resource
-weight
-
 template "Resource Priority"
 
 rule "Resource Priority @{resource}"
-salience 3
+salience @{priority}
 no-loop true
 when
-    $n : Node( $currentScore : score, $hexes : adjacentHexagons )
+    $n : Node(owner == null, available == true,
+              tags contains "Scored",
+              tags not contains "@{resource}",
+              $currentScore : score, $hexes : adjacentHexagons)
     $h : Hexagon( field == Resource.@{resource} ) from $hexes
 then
     int bonus = (int) Math.round($currentScore * @{weight});
     int newScore = Math.max(1, $currentScore + bonus);
-    modify($n) { 
-        setScore(newScore) 
-    };
-    System.out.println("[Resource Priority] Node " + $n.getId() + " has @{resource} (weight=@{weight}) - Score: " + $currentScore + " -> " + newScore);
+    $n.setScore(newScore);
+    $n.addTag("@{resource}");
+    update($n);
 end
 
 end template
