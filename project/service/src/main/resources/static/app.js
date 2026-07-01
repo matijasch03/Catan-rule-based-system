@@ -37,7 +37,20 @@ let game = null; // last BoardState from the server
 let colorByPlayer = {}; // playerId -> color
 let selectedNodeId = null; // node chosen by the user, awaiting a road
 let lastHexes = []; // most recent hexes, so the overlay can redraw without refetching
-
+let autoOpponents = true; // whether players 1 & 2 are computer-controlled
+ 
+// A human turn is any non-terminal phase: the server auto-resolves computer
+// players within a request and only pauses when it needs the user to place.
+function isHumanTurn() {
+  return game && game.phase !== "IDLE" && game.phase !== "DONE";
+}
+ 
+// Parse a phase like "R2_P1" into { round, player } (1-based); null otherwise.
+function parsePhase() {
+  const m = game && /^R(\d)_P(\d)$/.exec(game.phase || "");
+  return m ? { round: Number(m[1]), player: Number(m[2]) } : null;
+}
+ 
 // Probability pips for a number token (higher near 6/8).
 function pipsFor(n) {
   if (!n || n < 2 || n > 12) return "";
@@ -143,8 +156,7 @@ function renderOverlay(size) {
   const nodeById = {};
   for (const n of game.nodes) nodeById[n.id] = n;
 
-  const isUserTurn = game.phase === "R1_P3" || game.phase === "R2_P3";
-
+  const isUserTurn = isHumanTurn();
   // ---- edges (base lines + roads) ----
   for (const e of game.edges) {
     const a = nodeById[e.node1Id];
@@ -222,8 +234,8 @@ function renderResourceBadges(svg, cx, cy, resources) {
 
 function renderPanel() {
   playersEl.innerHTML = "";
-  const labels = ["Player 1 (computer)", "Player 2 (computer)", "You (Player 3)"];
-  (game ? game.players : []).forEach((pl, i) => {
+  const oppLabel = autoOpponents ? "computer" : "you";
+  const labels = [`Player 1 (${oppLabel})`, `Player 2 (${oppLabel})`, "You (Player 3)"];  (game ? game.players : []).forEach((pl, i) => {
     const li = document.createElement("li");
     const sw = document.createElement("span");
     sw.className = "swatch";
@@ -295,17 +307,28 @@ function draw(hexes) {
 
 function describePhase() {
   if (!game || game.phase === "IDLE") {
-    setStatus("Press \u201CNew Game\u201D: players 1 and 2 are placed automatically, then it\u2019s your turn.");
-  } else if (game.phase === "R1_P3") {
-    setStatus(selectedNodeId == null
-      ? "Round 1 \u2013 click a free spot (circle) to place your village."
-      : `Village on node ${selectedNodeId}. Now click one of the highlighted roads next to it.`);
-  } else if (game.phase === "R2_P3") {
-    setStatus(selectedNodeId == null
-      ? "Round 2 (reverse order) \u2013 your turn first. Place a SECOND village; it earns one resource per neighbouring tile."
-      : `Second village on node ${selectedNodeId}. Now click one of the highlighted roads next to it.`);
-  } else if (game.phase === "DONE") {
-    setStatus("Both rounds done \u2013 you collected the resources next to your second village. Press \u201CNew Game\u201D to play again.");
+    setStatus(autoOpponents
+      ? "Press \u201CNew Game\u201D: players 1 and 2 are placed automatically, then it\u2019s your turn."
+      : "Press \u201CNew Game\u201D: you place villages and roads for all three players.");
+    return;
+  }
+  if (game.phase === "DONE") {
+    setStatus("Both rounds done \u2013 each second village collected the resources next to it. Press \u201CNew Game\u201D to play again.");
+    return;
+  }
+  const info = parsePhase();
+  if (!info) return;
+  // Whom the user is currently placing for.
+  const who = !autoOpponents && info.player !== 3 ? `Player ${info.player}` : "you";
+  const whoCap = who === "you" ? "You" : who;
+  const second = info.round === 2;
+  if (selectedNodeId == null) {
+    const roundTxt = second
+      ? "(round 2, reverse order) \u2013 place a SECOND village; it earns one resource per neighbouring tile."
+      : "(round 1) \u2013 place a village.";
+    setStatus(`${whoCap} ${roundTxt} Click a free spot (circle).`);
+  } else {
+    setStatus(`${second ? "Second village" : "Village"} on node ${selectedNodeId} for ${who}. Now click one of the highlighted roads next to it.`);
   }
 }
 
@@ -368,10 +391,20 @@ async function placeRoad(edgeId) {
   }, "Placing\u2026");
 }
 
+function selectedOpponentsMode() {
+  const picked = document.querySelector('input[name="opponents"]:checked');
+  return !picked || picked.value === "computer";
+}
+
 newGameBtn.addEventListener("click", () =>
   run(async () => {
+    autoOpponents = selectedOpponentsMode();
     const hexes = await loadHexes();
-    game = await getJson("/api/game/new", { method: "POST" });
+    game = await getJson("/api/game/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ autoOpponents }),
+    });
     selectedNodeId = null;
     draw(hexes);
     describePhase();

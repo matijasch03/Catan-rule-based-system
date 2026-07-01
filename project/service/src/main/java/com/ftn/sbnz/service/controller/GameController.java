@@ -42,52 +42,82 @@ public class GameController {
 
     private final NodeService nodeService;
     private final EdgeService edgeService;
-    private final PlayerService playerService;
+     private final PlayerService playerService;
     private final Random random = new Random();
-
+ 
+    // Placement order over two rounds: round 1 goes P1,P2,P3; round 2 reverses to
+    // P3,P2,P1. Each step is {round (1/2), player index 0..2}.
+    private static final int[][] STEPS = {
+        {1, 0}, {1, 1}, {1, 2},
+        {2, 2}, {2, 1}, {2, 0},
+    };
+ 
     // Turn state kept in memory; board piece ownership is persisted in the DB.
     private List<Integer> playerIds = new ArrayList<>();
     private Integer currentPlayerId = null;
     private String phase = "IDLE";
+    private int step = 0;
+    // When true players 1 and 2 are auto-played by the computer; otherwise the user
+    // places for every player.
+    private boolean autoOpponents = true;
     // Vertices that handed out resources (second villages): nodeId -> resource names.
     private final Map<Integer, List<String>> resourceNodes = new HashMap<>();
-
+ 
     public GameController(NodeService nodeService, EdgeService edgeService, PlayerService playerService) {
         this.nodeService = nodeService;
         this.edgeService = edgeService;
         this.playerService = playerService;
     }
-
+ 
     @GetMapping("/state")
     public BoardStateDto state() {
         return buildState();
     }
-
-    // Start a fresh game. Round 1 goes P1, P2, P3: players 1 and 2 are auto-placed,
-    // then the user (player 3) places. Round 2 then runs in reverse order.
+ 
+    // Start a fresh game. Round 1 goes P1, P2, P3; round 2 runs in reverse order.
+    // If autoOpponents is true, players 1 and 2 are placed automatically and the
+    // user only plays player 3; otherwise the user places for all three players.
     @PostMapping("/new")
-    public BoardStateDto newGame() {
+    public BoardStateDto newGame(@RequestBody(required = false) NewGameRequest req) {
         resetBoard();
         createPlayers();
-
-        autoPlace(playerIds.get(0), false);
-        autoPlace(playerIds.get(1), false);
-
-        currentPlayerId = playerIds.get(2);
-        phase = "R1_P3";
+        autoOpponents = req == null || req.autoOpponents;
+        step = 0;
+        advanceToHuman();
         return buildState();
     }
-
+ 
+    // Auto-place every computer-controlled player until it is a human's turn (or the
+    // game is over), updating phase/currentPlayerId to point at the pending step.
+    private void advanceToHuman() {
+        while (step < STEPS.length) {
+            int round = STEPS[step][0];
+            int idx = STEPS[step][1];
+            if (isHuman(idx)) {
+                currentPlayerId = playerIds.get(idx);
+                phase = "R" + round + "_P" + (idx + 1);
+                return;
+            }
+            autoPlace(playerIds.get(idx), round == 2);
+            step++;
+        }
+        currentPlayerId = null;
+        phase = "DONE";
+    }
+ 
+    private boolean isHuman(int playerIndex) {
+        return playerIndex == 2 || !autoOpponents;
+    }
+ 
     // The user places a village on a free node and a road on a linked edge. They do
     // this twice: once in round 1, then again first in the reverse-order round 2
     // (where the second village also yields up to three resources).
     @PostMapping("/place")
     public ResponseEntity<?> place(@RequestBody PlaceRequest req) {
-        boolean round1 = "R1_P3".equals(phase);
-        boolean round2 = "R2_P3".equals(phase);
-        if (!round1 && !round2) {
+        if (step >= STEPS.length || currentPlayerId == null) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Not your turn. Start a new game first.");
         }
+        int round = STEPS[step][0];
         Node node = nodeService.getById(req.nodeId).orElse(null);
         Edge edge = edgeService.getById(req.edgeId).orElse(null);
         if (node == null || edge == null) {
@@ -103,25 +133,19 @@ public class GameController {
         if (edge.getOwner() != null) {
             return ResponseEntity.badRequest().body("That road is already taken.");
         }
-
-        Player p = playerService.getById(playerIds.get(2)).orElseThrow();
+ 
+        Player p = playerService.getById(currentPlayerId).orElseThrow();
         placeVillage(node, p);
         placeRoad(edge, p);
-
-        if (round1) {
-            // Round 2 starts with the same player (reverse order), so it's still your turn.
-            phase = "R2_P3";
-            currentPlayerId = playerIds.get(2);
-        } else {
+ 
+        if (round == 2) {
             grantResources(node, p);
-            // Reverse order: after you, players 2 then 1 take their second turn.
-            autoPlace(playerIds.get(1), true);
-            autoPlace(playerIds.get(0), true);
-            phase = "DONE";
-            currentPlayerId = null;
         }
+        step++;
+        advanceToHuman();
         return ResponseEntity.ok(buildState());
     }
+ 
 
     // ---- placement helpers ----
 
@@ -267,5 +291,9 @@ public class GameController {
     public static class PlaceRequest {
         public int nodeId;
         public int edgeId;
+    }
+
+    public static class NewGameRequest {
+        public boolean autoOpponents = true;
     }
 }
