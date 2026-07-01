@@ -243,6 +243,36 @@ main {
     white-space: nowrap;
 }
 
+.advice-list {
+    margin: 0;
+    padding-left: 22px;
+}
+
+.advice-list li {
+    padding: 3px 0;
+}
+
+.advice {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid #315064;
+    border-radius: 7px;
+    padding: 7px 9px;
+    background: #142838;
+    color: #eef3f7;
+    cursor: pointer;
+}
+
+.advice-1 {
+    border-color: #ffd34d;
+}
+
+.advice span {
+    color: #9fc0d5;
+}
+
 .end-turn {
     width: 100%;
     margin-top: 10px;
@@ -442,6 +472,20 @@ main {
 .overlay .node-selected {
     fill: #ffd34d;
     r: 9;
+}
+
+.overlay .node-advice-1 {
+    fill: #ffd34d;
+    stroke: #fff3a3;
+    stroke-width: 3;
+    r: 9;
+}
+
+.overlay .node-advice-2 {
+    fill: #69d2e7;
+    stroke: #d9f9ff;
+    stroke-width: 3;
+    r: 8;
 }
 
 .overlay .piece {

@@ -1,7 +1,9 @@
 package com.ftn.sbnz.model;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import jakarta.persistence.*;
 
@@ -29,6 +31,14 @@ public class Node {
     private Settlement settlement;
 
     private int score;
+
+    // Temporary forward-chaining state. These values describe one advice run and
+    // are deliberately not persisted with the board.
+    @Transient
+    private boolean available = true;
+
+    @Transient
+    private Set<String> tags = new HashSet<>();
 
     public Node() {
         this.adjacentHexagons = new ArrayList<>();
@@ -89,6 +99,31 @@ public class Node {
 
     public void setScore(int score) {
         this.score = score;
+    }
+
+    public boolean isAvailable() {
+        return available;
+    }
+
+    public void setAvailable(boolean available) {
+        this.available = available;
+    }
+
+    public Set<String> getTags() {
+        if (tags == null) {
+            tags = new HashSet<>();
+        }
+        return tags;
+    }
+
+    public void addTag(String tag) {
+        getTags().add(tag);
+    }
+
+    public void resetAnalysis() {
+        score = 0;
+        available = true;
+        getTags().clear();
     }
 
     @Override

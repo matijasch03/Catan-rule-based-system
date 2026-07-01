@@ -25,6 +25,7 @@ import com.ftn.sbnz.model.Player;
 import com.ftn.sbnz.model.Resource;
 import com.ftn.sbnz.model.Settlement;
 import com.ftn.sbnz.service.dto.BoardStateDto;
+import com.ftn.sbnz.service.dto.AdviceDto;
 import com.ftn.sbnz.service.dto.DiceRollDto;
 import com.ftn.sbnz.service.dto.EdgeDto;
 import com.ftn.sbnz.service.dto.NodeDto;
@@ -32,6 +33,7 @@ import com.ftn.sbnz.service.dto.PlayerDto;
 import com.ftn.sbnz.service.service.EdgeService;
 import com.ftn.sbnz.service.service.NodeService;
 import com.ftn.sbnz.service.service.PlayerService;
+import com.ftn.sbnz.service.service.PlacementAdviceService;
 
 // Initial-placement game flow: three players each get a village + linked road.
 // Players 1 and 2 are placed automatically; player 3 is the human user.
@@ -43,7 +45,8 @@ public class GameController {
 
     private final NodeService nodeService;
     private final EdgeService edgeService;
-     private final PlayerService playerService;
+    private final PlayerService playerService;
+    private final PlacementAdviceService placementAdviceService;
     private final Random random = new Random();
  
     // Placement order over two rounds: round 1 goes P1,P2,P3; round 2 reverses to
@@ -71,10 +74,12 @@ public class GameController {
     // Keep one complete P1-P2-P3 cycle so the UI can show computer rolls too.
     private final List<DiceRollDto> diceRolls = new ArrayList<>();
  
-    public GameController(NodeService nodeService, EdgeService edgeService, PlayerService playerService) {
+    public GameController(NodeService nodeService, EdgeService edgeService, PlayerService playerService,
+                          PlacementAdviceService placementAdviceService) {
         this.nodeService = nodeService;
         this.edgeService = edgeService;
         this.playerService = playerService;
+        this.placementAdviceService = placementAdviceService;
     }
  
     @GetMapping("/state")
@@ -409,8 +414,14 @@ public class GameController {
             playerDtos.add(new PlayerDto(pid, COLORS[i % COLORS.length], resources));
         }
 
+        List<AdviceDto> advices = List.of();
+        if (step < STEPS.length && playerIds.size() == 3
+                && playerIds.get(2).equals(currentPlayerId)) {
+            advices = placementAdviceService.openingAdvice(playerIds.get(2));
+        }
+
         return new BoardStateDto(nodeDtos, edgeDtos, playerDtos, currentPlayerId, phase,
-                lastDiceSum, new ArrayList<>(diceRolls));
+                lastDiceSum, new ArrayList<>(diceRolls), advices);
     }
 
     public static class PlaceRequest {

@@ -13,13 +13,14 @@ public class BoardStateDto {
     private String phase;
     private int lastDiceSum;
     private List<DiceRollDto> diceRolls;
+    private List<AdviceDto> advices;
 
     public BoardStateDto() {
     }
 
     public BoardStateDto(List<NodeDto> nodes, List<EdgeDto> edges, List<PlayerDto> players,
                          Integer currentPlayerId, String phase, int lastDiceSum,
-                         List<DiceRollDto> diceRolls) {
+                         List<DiceRollDto> diceRolls, List<AdviceDto> advices) {
         this.nodes = nodes;
         this.edges = edges;
         this.players = players;
@@ -27,12 +28,13 @@ public class BoardStateDto {
         this.phase = phase;
         this.lastDiceSum = lastDiceSum;
         this.diceRolls = diceRolls;
+        this.advices = advices;
     }
     
     // Overload for backward compatibility
     public BoardStateDto(List<NodeDto> nodes, List<EdgeDto> edges, List<PlayerDto> players,
                          Integer currentPlayerId, String phase) {
-        this(nodes, edges, players, currentPlayerId, phase, 0, List.of());
+        this(nodes, edges, players, currentPlayerId, phase, 0, List.of(), List.of());
     }
 
     public List<NodeDto> getNodes() { return nodes; }
@@ -42,4 +44,5 @@ public class BoardStateDto {
     public String getPhase() { return phase; }
     public int getLastDiceSum() { return lastDiceSum; }
     public List<DiceRollDto> getDiceRolls() { return diceRolls; }
+    public List<AdviceDto> getAdvices() { return advices; }
 }

@@ -10,6 +10,7 @@ import org.kie.api.runtime.KieSession;
 import com.ftn.sbnz.model.Hexagon;
 import com.ftn.sbnz.model.Node;
 import com.ftn.sbnz.model.BoardPrinter;
+import com.ftn.sbnz.kjar.RankingRequest;
 
 import java.util.List;
 
@@ -40,6 +41,7 @@ public class RuleRunner {
             BoardPrinter.printBoard(board);
 
             for (Node n : nodes) ksession.insert(n);
+            ksession.insert(new RankingRequest());
             ksession.fireAllRules();
 
             BoardPrinter.printBoard(board);

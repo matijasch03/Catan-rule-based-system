@@ -34,6 +34,8 @@ const newGameBtn = document.getElementById("newgame-btn");
 const endTurnBtn = document.getElementById("end-turn-btn");
 const dicePanelEl = document.getElementById("dice-panel");
 const diceRollsEl = document.getElementById("dice-rolls");
+const advicePanelEl = document.getElementById("advice-panel");
+const adviceListEl = document.getElementById("advice-list");
 
 let layout = null; // { minX, minY, offX, offY }
 let game = null; // last BoardState from the server
@@ -162,6 +164,9 @@ function renderOverlay(size) {
   const svg = svgEl("svg", { class: "overlay", width: size.width, height: size.height });
   const nodeById = {};
   for (const n of game.nodes) nodeById[n.id] = n;
+  const adviceByNode = Object.fromEntries(
+    (game.advices || []).map((advice) => [advice.nodeId, advice])
+  );
 
   const isUserTurn = isHumanTurn();
   // ---- edges (base lines + roads) ----
@@ -211,10 +216,13 @@ function renderOverlay(size) {
 
     const selectable = isUserTurn && selectedNodeId == null;
     const selected = n.id === selectedNodeId;
+    const advice = adviceByNode[n.id];
     const c = withTitle(svgEl("circle", {
       cx: p.x, cy: p.y, r: 6,
-      class: "node" + (selectable ? " node-pick" : "") + (selected ? " node-selected" : ""),
-    }), `Node ${n.id}`);
+      class: "node" + (selectable ? " node-pick" : "")
+        + (advice ? ` node-advice-${advice.rank}` : "")
+        + (selected ? " node-selected" : ""),
+    }), advice ? advice.description : `Node ${n.id}`);
     if (selectable) {
       c.addEventListener("click", () => selectNode(n.id));
     }
@@ -288,6 +296,21 @@ function renderPanel() {
   }
 
   endTurnBtn.hidden = !isMainTurn();
+
+  const advices = (game && game.advices) || [];
+  advicePanelEl.hidden = advices.length === 0;
+  adviceListEl.innerHTML = "";
+  for (const advice of advices) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `advice advice-${advice.rank}`;
+    button.innerHTML = `<strong>Node ${advice.nodeId}</strong><span>Score ${advice.score}</span>`;
+    button.title = advice.description;
+    button.addEventListener("click", () => selectNode(advice.nodeId));
+    item.appendChild(button);
+    adviceListEl.appendChild(item);
+  }
 }
 
 // Big resource cards for the human player's hand (one card per resource unit).

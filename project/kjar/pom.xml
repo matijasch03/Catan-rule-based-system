@@ -75,6 +75,18 @@
 	</dependencies>
 
 	<build>
+		<resources>
+			<resource>
+				<directory>src/main/resources</directory>
+				<!-- These are legacy template inputs, not standalone KIE resources.
+				     In particular, packaging the CSV makes Drools try to compile it
+				     as a decision table when boardScoreSession is created. -->
+				<excludes>
+					<exclude>rules/board/resource_priority.csv</exclude>
+					<exclude>rules/board/resource_priority.drt</exclude>
+				</excludes>
+			</resource>
+		</resources>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
