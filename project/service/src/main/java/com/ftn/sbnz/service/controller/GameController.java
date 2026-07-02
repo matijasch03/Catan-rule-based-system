@@ -22,6 +22,7 @@ import com.ftn.sbnz.model.Edge;
 import com.ftn.sbnz.model.Hexagon;
 import com.ftn.sbnz.model.Node;
 import com.ftn.sbnz.model.Player;
+import com.ftn.sbnz.model.PlayerScoreFact;
 import com.ftn.sbnz.model.Resource;
 import com.ftn.sbnz.model.Settlement;
 import com.ftn.sbnz.service.dto.BoardStateDto;
@@ -34,6 +35,7 @@ import com.ftn.sbnz.service.service.EdgeService;
 import com.ftn.sbnz.service.service.NodeService;
 import com.ftn.sbnz.service.service.PlayerService;
 import com.ftn.sbnz.service.service.PlacementAdviceService;
+import com.ftn.sbnz.service.service.ScoringService;
 
 // Initial-placement game flow: three players each get a village + linked road.
 // Players 1 and 2 are placed automatically; player 3 is the human user.
@@ -47,6 +49,7 @@ public class GameController {
     private final EdgeService edgeService;
     private final PlayerService playerService;
     private final PlacementAdviceService placementAdviceService;
+    private final ScoringService scoringService;
     private final Random random = new Random();
  
     // Placement order over two rounds: round 1 goes P1,P2,P3; round 2 reverses to
@@ -75,11 +78,12 @@ public class GameController {
     private final List<DiceRollDto> diceRolls = new ArrayList<>();
  
     public GameController(NodeService nodeService, EdgeService edgeService, PlayerService playerService,
-                          PlacementAdviceService placementAdviceService) {
+                          PlacementAdviceService placementAdviceService, ScoringService scoringService) {
         this.nodeService = nodeService;
         this.edgeService = edgeService;
         this.playerService = playerService;
         this.placementAdviceService = placementAdviceService;
+        this.scoringService = scoringService;
     }
  
     @GetMapping("/state")
@@ -208,6 +212,9 @@ public class GameController {
     // Endpoint for human to end their turn and advance to next player
     @PostMapping("/endTurn")
     public ResponseEntity<?> endTurn() {
+        if ("DONE".equals(phase)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body("The game is already over.");
+        }
         if (step < STEPS.length) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body("Still in placement phase.");
         }
@@ -330,6 +337,7 @@ public class GameController {
     private void placeRoad(Edge edge, Player player) {
         edge.setOwner(player);
         edgeService.updateById(edge.getId(), edge);
+        scoringService.recordRoadBuilt(player.getId());
     }
 
     // A node may hold a village if it is empty and none of its edge-neighbours
@@ -372,6 +380,7 @@ public class GameController {
         diceResourceNodes.clear();
         lastDiceSum = 0;
         diceRolls.clear();
+        scoringService.reset();
     }
 
     private void createPlayers() {
@@ -402,16 +411,34 @@ public class GameController {
         }
         edgeDtos.sort(Comparator.comparingInt(EdgeDto::getId));
 
+        List<Player> players = new ArrayList<>();
+        for (int pid : playerIds) {
+            playerService.getById(pid).ifPresent(players::add);
+        }
+        List<PlayerScoreFact> scoreFacts = scoringService.calculate(players);
+        Map<Integer, PlayerScoreFact> scoreByPlayer = new HashMap<>();
+        for (PlayerScoreFact fact : scoreFacts) {
+            scoreByPlayer.put(fact.getPlayerId(), fact);
+            if (fact.isWinner()) {
+                phase = "DONE";
+                currentPlayerId = null;
+            }
+        }
+
         List<PlayerDto> playerDtos = new ArrayList<>();
         for (int i = 0; i < playerIds.size(); i++) {
             int pid = playerIds.get(i);
             Map<String, Integer> resources = new LinkedHashMap<>();
-            playerService.getById(pid).ifPresent(pl -> {
-                if (pl.getResources() != null) {
-                    pl.getResources().forEach((res, count) -> resources.put(res.getDisplayName(), count));
-                }
-            });
-            playerDtos.add(new PlayerDto(pid, COLORS[i % COLORS.length], resources));
+            Player player = players.stream().filter(pl -> pl.getId() == pid).findFirst().orElse(null);
+            if (player != null && player.getResources() != null) {
+                player.getResources().forEach((res, count) -> resources.put(res.getDisplayName(), count));
+            }
+            PlayerScoreFact score = scoreByPlayer.get(pid);
+            playerDtos.add(new PlayerDto(pid, COLORS[i % COLORS.length],
+                    score == null ? 0 : score.getScore(),
+                    score == null ? 0 : score.getLongestRoadLength(),
+                    score != null && score.isLongestRoadAwarded(),
+                    score != null && score.isWinner(), resources));
         }
 
         List<AdviceDto> advices = List.of();

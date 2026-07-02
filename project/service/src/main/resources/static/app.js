@@ -257,6 +257,14 @@ function renderPanel() {
     sw.style.background = pl.color;
     li.appendChild(sw);
     li.appendChild(document.createTextNode(labels[i] || `Player ${pl.id}`));
+    const score = document.createElement("strong");
+    score.className = "player-score";
+    score.textContent = `${pl.score} VP`;
+    score.title = pl.longestRoad
+      ? `Longest road: ${pl.longestRoadLength} (+2 VP)`
+      : `Longest road: ${pl.longestRoadLength}`;
+    li.appendChild(score);
+    if (pl.winner) li.classList.add("winner");
     if (game.currentPlayerId === pl.id) li.classList.add("active");
 
     const res = document.createElement("span");
@@ -371,7 +379,11 @@ function describePhase() {
     return;
   }
   if (game.phase === "DONE") {
-    setStatus("Both rounds done \u2013 each second village collected the resources next to it. Press \u201CNew Game\u201D to play again.");
+    const winner = (game.players || []).find((player) => player.winner);
+    const name = winner
+      ? (winner === game.players[game.players.length - 1] ? "You have" : `Player ${game.players.indexOf(winner) + 1} has`)
+      : "A player has";
+    setStatus(`${name} won with 10 victory points! Press \u201CNew Game\u201D to play again.`);
     return;
   }
   if (isMainTurn()) {

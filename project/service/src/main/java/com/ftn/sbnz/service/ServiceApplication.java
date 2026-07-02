@@ -48,6 +48,9 @@ public class ServiceApplication {
 		fileSystem.write("src/main/resources/rules/board/node-scoring.drl",
 				services.getResources().newClassPathResource(
 						"rules/board/node-scoring.drl", ResourcePriorityTemplateCompiler.class));
+		fileSystem.write("src/main/resources/rules/board/player-scoring.drl",
+				services.getResources().newClassPathResource(
+						"rules/board/player-scoring.drl", ResourcePriorityTemplateCompiler.class));
 
 		String priorityRules;
 		try (InputStream template = ResourcePriorityTemplateCompiler.class.getClassLoader()
