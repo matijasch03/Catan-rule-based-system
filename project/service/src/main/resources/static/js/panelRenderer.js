@@ -11,6 +11,9 @@ import {
 import { isMainTurn } from "./phase.js";
 import { state } from "./state.js";
 
+let lastHandSignature = "";
+let shuffledHandCards = [];
+
 export function renderPanel(selectNode) {
   renderPlayers();
   renderDiceRolls();
@@ -129,13 +132,48 @@ function renderAdvice(selectNode) {
 }
 
 function resourceCards(tally) {
+  const signature = JSON.stringify(Object.entries(tally).sort(([a], [b]) => a.localeCompare(b)));
+  if (signature === lastHandSignature) {
+    return shuffledHandCards;
+  }
+
+  lastHandSignature = signature;
+  shuffledHandCards = mixedResourceCards(tally);
+  return shuffledHandCards;
+}
+
+function mixedResourceCards(tally) {
+  const remaining = Object.fromEntries(
+    Object.entries(tally).filter(([, count]) => count > 0)
+  );
   const cards = [];
-  for (const [label, count] of Object.entries(tally)) {
-    for (let i = 0; i < count; i++) {
-      cards.push(label);
+
+  while (Object.keys(remaining).length) {
+    const labels = Object.keys(remaining);
+    const choices = labels.filter((label) => label !== cards[cards.length - 1]);
+    const pool = choices.length ? choices : labels;
+    const next = weightedPick(pool, remaining);
+
+    cards.push(next);
+    remaining[next] -= 1;
+    if (remaining[next] <= 0) {
+      delete remaining[next];
     }
   }
+
   return cards;
+}
+
+function weightedPick(labels, weights) {
+  const total = labels.reduce((sum, label) => sum + weights[label], 0);
+  let roll = Math.random() * total;
+  for (const label of labels) {
+    roll -= weights[label];
+    if (roll <= 0) {
+      return label;
+    }
+  }
+  return labels[labels.length - 1];
 }
 
 function createCard(label) {
