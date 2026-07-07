@@ -1,5 +1,5 @@
 import { statusEl } from "./dom.js";
-import { isMainTurn, parsePhase } from "./phase.js";
+import { isMainTurn, isUserControlledMainTurn, parsePhase, parseTurnPhase } from "./phase.js?v=20260707-turn-steps";
 import { state } from "./state.js";
 
 export function setStatus(text) {
@@ -25,9 +25,13 @@ export function describePhase() {
     return;
   }
 
-  if (isMainTurn()) {
-    const playerNumber = Number(/^TURN_P(\d+)_ROLLED$/.exec(state.game.phase)[1]);
-    const who = playerNumber === 3 ? "You rolled" : `Player ${playerNumber} rolled`;
+  const turn = parseTurnPhase();
+  if (turn) {
+    const message = state.game.turnMessage || "";
+    if (turn.stage === "READY") {
+      setStatus(`${message} Press “Roll dice” to resolve dice and resources.`);
+      return;
+    }
     if (state.buildMode === "ROAD") {
       setStatus("Choose one highlighted road connected to your road, village, or town.");
       return;
@@ -40,11 +44,19 @@ export function describePhase() {
       setStatus("Choose one highlighted village to upgrade into a town.");
       return;
     }
-    if (state.game.lastDiceSum === 7) {
-      setStatus(`${who} 7. Players with more than 7 cards discarded half to the bank.`);
+    if (turn.stage === "BUILT") {
+      setStatus(`${message} Press “Next player” to continue.`);
       return;
     }
-    setStatus(`${who} ${state.game.lastDiceSum}. Resources were given to every village beside a ${state.game.lastDiceSum} tile.`);
+    if (state.game.lastDiceSum === 7) {
+      setStatus(`${message} ${turn.player === 3 || !state.autoOpponents ? "You can build or end the turn." : "Press “Simulate build” for this opponent."}`);
+      return;
+    }
+    if (isMainTurn() && !isUserControlledMainTurn()) {
+      setStatus(`${message} Press “Simulate build” for this opponent.`);
+      return;
+    }
+    setStatus(`${message} You can build, or end the turn.`);
     return;
   }
 

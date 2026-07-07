@@ -7,11 +7,11 @@ import {
   placeOpeningRoad,
   reshuffleBoard,
 } from "./js/api.js";
-import { renderBoard } from "./js/boardRenderer.js?v=20260707-road-hitbox";
+import { renderBoard } from "./js/boardRenderer.js?v=20260707-turn-steps";
 import { endTurnBtn, newGameBtn, reloadBtn, selectedOpponentsMode } from "./js/dom.js";
-import { renderHand, renderPanel } from "./js/panelRenderer.js";
+import { renderHand, renderPanel } from "./js/panelRenderer.js?v=20260707-turn-steps";
 import { state } from "./js/state.js";
-import { describePhase, setStatus } from "./js/status.js";
+import { describePhase, setStatus } from "./js/status.js?v=20260707-turn-steps";
 
 const actions = {
   selectNode,
@@ -123,7 +123,7 @@ endTurnBtn.addEventListener("click", () =>
     state.buildMode = null;
     draw(state.lastHexes);
     describePhase();
-  }, "Playing the next turns\u2026")
+  }, "Advancing\u2026")
 );
 
 run(() => refreshAll(), "Loading board\u2026");

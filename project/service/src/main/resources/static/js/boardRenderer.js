@@ -2,7 +2,7 @@ import { HEX_SIZE, ICON_BY_LABEL, PADDING, RESOURCE } from "./constants.js";
 import { boardEl } from "./dom.js";
 import { hexCenterPx, pipsFor, toScreen } from "./boardGeometry.js";
 import { housePath, svgEl, withTitle } from "./svg.js";
-import { isHumanTurn } from "./phase.js";
+import { isHumanTurn } from "./phase.js?v=20260707-turn-steps";
 import { state } from "./state.js";
 
 export function renderBoard(hexes, actions) {

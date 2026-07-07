@@ -56,6 +56,7 @@ public class GameService {
     private final Map<Integer, List<String>> diceResourceNodes = new HashMap<>();
     private int lastDiceSum = 0;
     private final List<DiceRollDto> diceRolls = new ArrayList<>();
+    private String turnMessage = "";
 
     public GameService(NodeService nodeService, EdgeService edgeService, PlayerService playerService,
                        PlacementAdviceService placementAdviceService, ScoringService scoringService,
@@ -125,17 +126,42 @@ public class GameService {
         if (step < STEPS.length) {
             throw new GameActionException(HttpStatus.CONFLICT, "Still in placement phase.");
         }
-        advanceToNextPlayer();
-        playTurnWithDiceIfNeeded();
+
+        if (isReadyTurn()) {
+            rollDiceForCurrentPlayer();
+            phase = turnPhase("ROLLED");
+            turnMessage = diceMessage(currentPlayerTurnIndex + 1);
+            return buildState();
+        }
+
+        if (isRolledTurn()) {
+            if (isAutoOpponentTurn()) {
+                turnMessage = simulateOpponentBuild();
+                phase = turnPhase("BUILT");
+            } else {
+                advanceToNextPlayer();
+                startCurrentTurn();
+            }
+            return buildState();
+        }
+
+        if (isBuiltTurn()) {
+            advanceToNextPlayer();
+            startCurrentTurn();
+            return buildState();
+        }
+
+        startCurrentTurn();
         return buildState();
     }
 
     public synchronized BoardStateDto build(String action, Integer nodeId, Integer edgeId) {
-        if (!isMainTurn()) {
+        if (!isMainTurn() || !isUserControlledCurrentPlayer()) {
             throw new GameActionException(HttpStatus.CONFLICT, "You can build only after dice are rolled.");
         }
         Player player = playerService.getById(currentPlayerId).orElseThrow();
         buildActionService.build(player, action, nodeId, edgeId);
+        turnMessage = playerLabel(currentPlayerTurnIndex + 1) + " built " + action.toLowerCase() + ".";
         return buildState();
     }
 
@@ -154,24 +180,11 @@ public class GameService {
 
         currentPlayerTurnIndex = 0;
         currentPlayerId = playerIds.get(0);
-        phase = "TURN_P1";
-        playTurnWithDiceIfNeeded();
+        startCurrentTurn();
     }
 
     private boolean isHuman(int playerIndex) {
         return playerIndex == 2 || !autoOpponents;
-    }
-
-    private void playTurnWithDiceIfNeeded() {
-        while (step >= STEPS.length && currentPlayerId != null) {
-            if (isHuman(currentPlayerTurnIndex)) {
-                rollDiceForCurrentPlayer();
-                phase = "TURN_P" + (currentPlayerTurnIndex + 1) + "_ROLLED";
-                return;
-            }
-            rollDiceForCurrentPlayer();
-            advanceToNextPlayer();
-        }
     }
 
     private void rollDiceForCurrentPlayer() {
@@ -194,6 +207,48 @@ public class GameService {
 
     private boolean isMainTurn() {
         return step >= STEPS.length && phase != null && phase.matches("TURN_P\\d+_ROLLED");
+    }
+
+    private boolean isReadyTurn() {
+        return step >= STEPS.length && phase != null && phase.matches("TURN_P\\d+_READY");
+    }
+
+    private boolean isRolledTurn() {
+        return isMainTurn();
+    }
+
+    private boolean isBuiltTurn() {
+        return step >= STEPS.length && phase != null && phase.matches("TURN_P\\d+_BUILT");
+    }
+
+    private boolean isAutoOpponentTurn() {
+        return autoOpponents && currentPlayerTurnIndex != 2;
+    }
+
+    private boolean isUserControlledCurrentPlayer() {
+        return !autoOpponents || currentPlayerTurnIndex == 2;
+    }
+
+    private String turnPhase(String suffix) {
+        return "TURN_P" + (currentPlayerTurnIndex + 1) + "_" + suffix;
+    }
+
+    private void startCurrentTurn() {
+        diceResourceNodes.clear();
+        phase = turnPhase("READY");
+        turnMessage = playerLabel(currentPlayerTurnIndex + 1) + " is ready to roll.";
+    }
+
+    private String diceMessage(int playerNumber) {
+        String who = playerLabel(playerNumber);
+        if (lastDiceSum == 7) {
+            return who + " rolled 7. Players with more than 7 cards discarded half to the bank.";
+        }
+        return who + " rolled " + lastDiceSum + ". Resources were distributed to matching villages and towns.";
+    }
+
+    private String playerLabel(int playerNumber) {
+        return playerNumber == 3 ? "You" : "Player " + playerNumber;
     }
 
     private void discardForSeven() {
@@ -283,6 +338,45 @@ public class GameService {
         currentPlayerTurnIndex = (currentPlayerTurnIndex + 1) % playerIds.size();
         currentPlayerId = playerIds.get(currentPlayerTurnIndex);
         phase = "TURN_P" + (currentPlayerTurnIndex + 1);
+    }
+
+    private String simulateOpponentBuild() {
+        Player player = playerService.getById(currentPlayerId).orElseThrow();
+        int playerNumber = currentPlayerTurnIndex + 1;
+
+        List<String> actions = buildActionService.availableActions(player);
+        if (actions.contains(BuildActionService.TOWN)) {
+            List<Integer> nodes = buildActionService.legalTownNodeIds(player);
+            if (!nodes.isEmpty()) {
+                int nodeId = randomChoice(nodes);
+                buildActionService.build(player, BuildActionService.TOWN, nodeId, null);
+                return playerLabel(playerNumber) + " upgraded village " + nodeId + " into a town.";
+            }
+        }
+
+        if (actions.contains(BuildActionService.VILLAGE)) {
+            List<Integer> nodes = buildActionService.legalVillageNodeIds(player);
+            if (!nodes.isEmpty()) {
+                int nodeId = randomChoice(nodes);
+                buildActionService.build(player, BuildActionService.VILLAGE, nodeId, null);
+                return playerLabel(playerNumber) + " built a village on node " + nodeId + ".";
+            }
+        }
+
+        if (actions.contains(BuildActionService.ROAD)) {
+            List<Integer> edges = buildActionService.legalRoadEdgeIds(player);
+            if (!edges.isEmpty()) {
+                int edgeId = randomChoice(edges);
+                buildActionService.build(player, BuildActionService.ROAD, null, edgeId);
+                return playerLabel(playerNumber) + " built a road on edge " + edgeId + ".";
+            }
+        }
+
+        return playerLabel(playerNumber) + " could not afford a legal build and passed.";
+    }
+
+    private int randomChoice(List<Integer> ids) {
+        return ids.get(random.nextInt(ids.size()));
     }
 
     private void autoPlace(int playerId, boolean grantResources) {
@@ -385,6 +479,7 @@ public class GameService {
         diceResourceNodes.clear();
         lastDiceSum = 0;
         diceRolls.clear();
+        turnMessage = "";
         scoringService.reset();
     }
 
@@ -454,7 +549,7 @@ public class GameService {
         return new BoardStateDto(nodeDtos, edgeDtos, playerDtos, currentPlayerId, phase,
                 lastDiceSum, new ArrayList<>(diceRolls), advices,
                 buildOptions.actions(), buildOptions.roadEdgeIds(),
-                buildOptions.villageNodeIds(), buildOptions.townNodeIds());
+                buildOptions.villageNodeIds(), buildOptions.townNodeIds(), turnMessage);
     }
 
     private Map<String, Integer> playerResources(List<Player> players, int playerId) {
@@ -471,7 +566,7 @@ public class GameService {
     }
 
     private BuildOptions buildOptions(List<Player> players) {
-        if (!isMainTurn() || currentPlayerId == null) {
+        if (!isMainTurn() || !isUserControlledCurrentPlayer() || currentPlayerId == null) {
             return BuildOptions.empty();
         }
         return players.stream()

@@ -18,6 +18,7 @@ public class BoardStateDto {
     private List<Integer> legalRoadEdgeIds;
     private List<Integer> legalVillageNodeIds;
     private List<Integer> legalTownNodeIds;
+    private String turnMessage;
 
     public BoardStateDto() {
     }
@@ -53,6 +54,18 @@ public class BoardStateDto {
         this.legalRoadEdgeIds = legalRoadEdgeIds;
         this.legalVillageNodeIds = legalVillageNodeIds;
         this.legalTownNodeIds = legalTownNodeIds;
+        this.turnMessage = "";
+    }
+
+    public BoardStateDto(List<NodeDto> nodes, List<EdgeDto> edges, List<PlayerDto> players,
+                         Integer currentPlayerId, String phase, int lastDiceSum,
+                         List<DiceRollDto> diceRolls, List<AdviceDto> advices,
+                         List<String> availableActions, List<Integer> legalRoadEdgeIds,
+                         List<Integer> legalVillageNodeIds, List<Integer> legalTownNodeIds,
+                         String turnMessage) {
+        this(nodes, edges, players, currentPlayerId, phase, lastDiceSum, diceRolls, advices,
+                availableActions, legalRoadEdgeIds, legalVillageNodeIds, legalTownNodeIds);
+        this.turnMessage = turnMessage;
     }
     
     // Overload for backward compatibility
@@ -73,4 +86,5 @@ public class BoardStateDto {
     public List<Integer> getLegalRoadEdgeIds() { return legalRoadEdgeIds; }
     public List<Integer> getLegalVillageNodeIds() { return legalVillageNodeIds; }
     public List<Integer> getLegalTownNodeIds() { return legalTownNodeIds; }
+    public String getTurnMessage() { return turnMessage; }
 }

@@ -96,7 +96,6 @@ public class BoardGenerator {
         }
 
         Map<String, Node> nodes = new HashMap<>();
-        int nodeId = 1;
 
         // Offsets for the three hexes touching each corner, per orientation
         Map<NodeOrientation, int[][]> cornerOffsets = new HashMap<>();

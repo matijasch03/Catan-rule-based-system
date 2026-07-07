@@ -10,7 +10,7 @@ import {
   handCardsEl,
   playersEl,
 } from "./dom.js";
-import { isMainTurn } from "./phase.js";
+import { canAdvanceTurn, isUserControlledMainTurn, turnButtonLabel } from "./phase.js?v=20260707-turn-steps";
 import { state } from "./state.js";
 
 let lastHandSignature = "";
@@ -21,7 +21,8 @@ export function renderPanel(selectNode, buildAction) {
   renderDiceRolls();
   renderAdvice(selectNode);
   renderBuildActions(buildAction);
-  endTurnBtn.hidden = !isMainTurn();
+  endTurnBtn.hidden = !canAdvanceTurn();
+  endTurnBtn.textContent = turnButtonLabel();
 }
 
 export function renderHand() {
@@ -136,7 +137,7 @@ function renderAdvice(selectNode) {
 
 function renderBuildActions(buildAction) {
   const available = new Set((state.game && state.game.availableActions) || []);
-  buildPanelEl.hidden = !isMainTurn();
+  buildPanelEl.hidden = !isUserControlledMainTurn();
 
   for (const button of buildButtons) {
     const action = button.dataset.action;
