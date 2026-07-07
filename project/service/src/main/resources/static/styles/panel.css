@@ -1,0 +1,210 @@
+.panel {
+    flex: 0 0 340px;
+    width: 340px;
+    background: #0c1822;
+    border: 1px solid #1f3445;
+    border-radius: 12px;
+    padding: 16px 20px;
+}
+
+.panel h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #7f99ab;
+    margin: 18px 0 8px;
+}
+
+.panel h2:first-child {
+    margin-top: 0;
+}
+
+.players,
+.legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.players li,
+.legend li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 0;
+    font-size: 14px;
+}
+
+.players li {
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+.player-name {
+    white-space: nowrap;
+}
+
+.players li.active {
+    font-weight: 700;
+    color: #ffd34d;
+}
+
+.swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: #888;
+    flex: 0 0 auto;
+}
+
+.swatch.piece-village {
+    background: #e8821a;
+    width: 13px;
+    height: 13px;
+    clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%);
+}
+
+.swatch.piece-town {
+    background: #e8821a;
+    width: 26px;
+    height: 26px;
+    clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%);
+}
+
+.swatch.piece-road {
+    background: #e8821a;
+    height: 6px;
+    border-radius: 3px;
+}
+
+.player-score {
+    white-space: nowrap;
+    color: #f3c969;
+}
+
+.players li.winner {
+    box-shadow: 0 0 0 2px #f3c969;
+}
+
+.res-tally {
+    margin-left: auto;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: #cde0ef;
+    white-space: nowrap;
+}
+
+.advice-list {
+    margin: 0;
+    padding-left: 22px;
+}
+
+.advice-list li {
+    padding: 3px 0;
+}
+
+.advice {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid #315064;
+    border-radius: 7px;
+    padding: 7px 9px;
+    background: #142838;
+    color: #eef3f7;
+    cursor: pointer;
+}
+
+.advice-1 {
+    border-color: #ffd34d;
+}
+
+.advice span {
+    color: #9fc0d5;
+}
+
+.end-turn {
+    width: 100%;
+    margin-top: 10px;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    background: #2f8f4e;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.end-turn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.dice-panel {
+    margin-top: 18px;
+    border-top: 1px solid #1f3445;
+}
+
+.dice-rolls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dice-roll {
+    display: grid;
+    grid-template-columns: 1fr 27px 27px 34px;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.dice-player {
+    color: #cde0ef;
+}
+
+.die {
+    display: inline-grid;
+    place-items: center;
+    width: 27px;
+    height: 27px;
+    border-radius: 5px;
+    background: #f4ecd6;
+    color: #172430;
+    font-weight: 800;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+    animation: dice-pop 0.35s ease-out both;
+}
+
+.dice-roll:nth-child(2) .die {
+    animation-delay: 0.12s;
+}
+
+.dice-roll:nth-child(3) .die {
+    animation-delay: 0.24s;
+}
+
+@keyframes dice-pop {
+    from {
+        transform: rotate(-25deg) scale(0.55);
+        opacity: 0;
+    }
+
+    to {
+        transform: rotate(0) scale(1);
+        opacity: 1;
+    }
+}
+
+.dice-sum {
+    color: #ffd34d;
+}
+
+.status {
+    margin: 0;
+    min-height: 18px;
+    color: #cddae5;
+    font-size: 14px;
+    line-height: 1.5;
+}

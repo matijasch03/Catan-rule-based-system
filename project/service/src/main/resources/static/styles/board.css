@@ -1,0 +1,175 @@
+.board {
+    position: relative;
+    background: var(--sea);
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.hex {
+    position: absolute;
+    width: calc(var(--hex-size) * 1.732);
+    height: calc(var(--hex-size) * 2);
+    transform: translate(-50%, -50%);
+    clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    user-select: none;
+}
+
+.hex .icon {
+    font-size: 26px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+
+.hex.field-WOOD {
+    background: var(--wood);
+}
+
+.hex.field-WOOL {
+    background: var(--wool);
+}
+
+.hex.field-GRAIN {
+    background: var(--grain);
+}
+
+.hex.field-BRICK {
+    background: var(--brick);
+}
+
+.hex.field-ORE {
+    background: var(--ore);
+}
+
+.hex.field-DESERT {
+    background: var(--desert);
+}
+
+.token {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #f4ecd6;
+    color: #1b1b1b;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.token .number {
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.token.hot .number {
+    color: #c0392b;
+}
+
+.token .pips {
+    margin-top: 2px;
+    font-size: 7px;
+    letter-spacing: 1px;
+    line-height: 1;
+    color: #555;
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+.overlay .edge,
+.overlay .node,
+.overlay .road,
+.overlay .piece {
+    pointer-events: auto;
+}
+
+.overlay .edge {
+    stroke: #1c4e6b;
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: stroke 0.1s ease, stroke-width 0.1s ease;
+}
+
+.overlay .edge:hover {
+    stroke: #0c2c3e;
+    stroke-width: 5;
+}
+
+.overlay .edge-selectable {
+    stroke: #ffd34d;
+    stroke-width: 5;
+    cursor: pointer;
+}
+
+.overlay .edge-selectable:hover {
+    stroke: #fff;
+    stroke-width: 7;
+}
+
+.overlay .road {
+    stroke-width: 7;
+    stroke-linecap: round;
+}
+
+.overlay .node {
+    fill: rgba(255, 255, 255, 0.55);
+    stroke: #0c2c3e;
+    stroke-width: 1.5;
+    transition: r 0.1s ease, fill 0.1s ease;
+}
+
+.overlay .node-pick {
+    cursor: pointer;
+}
+
+.overlay .node-pick:hover {
+    r: 10;
+    fill: #ffd34d;
+}
+
+.overlay .node-selected {
+    fill: #ffd34d;
+    r: 9;
+}
+
+.overlay .node-advice-1 {
+    fill: #ffd34d;
+    stroke: #fff3a3;
+    stroke-width: 3;
+    r: 9;
+}
+
+.overlay .node-advice-2 {
+    fill: #69d2e7;
+    stroke: #d9f9ff;
+    stroke-width: 3;
+    r: 8;
+}
+
+.overlay .piece {
+    stroke: #08131c;
+    stroke-width: 1.5;
+}
+
+.overlay .res-badge {
+    fill: #fff;
+    stroke: #08131c;
+    stroke-width: 1;
+}
+
+.overlay .res-icon {
+    font-size: 10px;
+    text-anchor: middle;
+    dominant-baseline: central;
+}

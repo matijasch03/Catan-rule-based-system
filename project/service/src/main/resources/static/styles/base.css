@@ -1,0 +1,37 @@
+:root {
+    --hex-size: 62px;
+    --sea: #2a6f97;
+    --wood: #2f6b32;
+    --wool: #7cb342;
+    --grain: #e3b505;
+    --brick: #c1532a;
+    --ore: #7d8a96;
+    --desert: #d8c188;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: #11202e;
+    color: #eef3f7;
+}
+
+main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 28px;
+    padding: 32px 16px;
+}
+
+.board-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
