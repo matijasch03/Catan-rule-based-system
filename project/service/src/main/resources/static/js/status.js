@@ -28,6 +28,22 @@ export function describePhase() {
   if (isMainTurn()) {
     const playerNumber = Number(/^TURN_P(\d+)_ROLLED$/.exec(state.game.phase)[1]);
     const who = playerNumber === 3 ? "You rolled" : `Player ${playerNumber} rolled`;
+    if (state.buildMode === "ROAD") {
+      setStatus("Choose one highlighted road connected to your road, village, or town.");
+      return;
+    }
+    if (state.buildMode === "VILLAGE") {
+      setStatus("Choose one highlighted free spot connected by at least two of your roads.");
+      return;
+    }
+    if (state.buildMode === "TOWN") {
+      setStatus("Choose one highlighted village to upgrade into a town.");
+      return;
+    }
+    if (state.game.lastDiceSum === 7) {
+      setStatus(`${who} 7. Players with more than 7 cards discarded half to the bank.`);
+      return;
+    }
     setStatus(`${who} ${state.game.lastDiceSum}. Resources were given to every village beside a ${state.game.lastDiceSum} tile.`);
     return;
   }

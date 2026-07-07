@@ -88,12 +88,13 @@ function renderOverlay(size, actions) {
     (state.game.advices || []).map((advice) => [advice.nodeId, advice])
   );
 
-  renderEdges(svg, nodeById, actions.placeRoad);
-  renderNodes(svg, adviceByNode, actions.selectNode);
+  renderEdges(svg, nodeById, actions);
+  renderNodes(svg, adviceByNode, actions);
   boardEl.appendChild(svg);
 }
 
-function renderEdges(svg, nodeById, placeRoad) {
+function renderEdges(svg, nodeById, actions) {
+  const legalRoadEdges = new Set(state.game.legalRoadEdgeIds || []);
   for (const edge of state.game.edges) {
     const a = nodeById[edge.node1Id];
     const b = nodeById[edge.node2Id];
@@ -112,28 +113,43 @@ function renderEdges(svg, nodeById, placeRoad) {
     const incidentToSelected =
       state.selectedNodeId != null
       && (edge.node1Id === state.selectedNodeId || edge.node2Id === state.selectedNodeId);
+    const legalBuildRoad = state.buildMode === "ROAD" && legalRoadEdges.has(edge.id);
     const line = withTitle(svgEl("line", {
       x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
-      class: "edge" + (incidentToSelected ? " edge-selectable" : ""),
+      class: "edge" + (incidentToSelected || legalBuildRoad ? " edge-selectable" : ""),
     }), `Edge ${edge.id}`);
-    if (incidentToSelected) {
-      line.addEventListener("click", () => placeRoad(edge.id));
+    let hitbox = null;
+    if (legalBuildRoad) {
+      hitbox = withTitle(svgEl("line", {
+        x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
+        class: "edge-hitbox",
+      }), `Build road on edge ${edge.id}`);
+      hitbox.addEventListener("click", () => actions.buildOnEdge(edge.id));
+      line.addEventListener("click", () => actions.buildOnEdge(edge.id));
+    } else if (incidentToSelected) {
+      line.addEventListener("click", () => actions.placeRoad(edge.id));
     }
     svg.appendChild(line);
+    if (hitbox) {
+      svg.appendChild(hitbox);
+    }
   }
 }
 
-function renderNodes(svg, adviceByNode, selectNode) {
+function renderNodes(svg, adviceByNode, actions) {
   const isUserTurn = isHumanTurn();
+  const legalVillageNodes = new Set(state.game.legalVillageNodeIds || []);
   for (const node of state.game.nodes) {
     const point = toScreen(node.x, node.y);
 
     if (node.settlement) {
-      renderSettlement(svg, node, point);
+      renderSettlement(svg, node, point, actions);
       continue;
     }
 
-    const selectable = isUserTurn && state.selectedNodeId == null;
+    const openingSelectable = isUserTurn && state.selectedNodeId == null && state.buildMode == null;
+    const legalBuildVillage = state.buildMode === "VILLAGE" && legalVillageNodes.has(node.id);
+    const selectable = openingSelectable || legalBuildVillage;
     const selected = node.id === state.selectedNodeId;
     const advice = adviceByNode[node.id];
     const marker = withTitle(svgEl("circle", {
@@ -142,19 +158,26 @@ function renderNodes(svg, adviceByNode, selectNode) {
         + (advice ? ` node-advice-${advice.rank}` : "")
         + (selected ? " node-selected" : ""),
     }), advice ? advice.description : `Node ${node.id}`);
-    if (selectable) {
-      marker.addEventListener("click", () => selectNode(node.id));
+    if (legalBuildVillage) {
+      marker.addEventListener("click", () => actions.buildOnNode(node.id));
+    } else if (openingSelectable) {
+      marker.addEventListener("click", () => actions.selectNode(node.id));
     }
     svg.appendChild(marker);
   }
 }
 
-function renderSettlement(svg, node, point) {
+function renderSettlement(svg, node, point, actions) {
+  const legalTownNodes = new Set(state.game.legalTownNodeIds || []);
+  const legalUpgrade = state.buildMode === "TOWN" && legalTownNodes.has(node.id);
   const piece = withTitle(svgEl("path", {
     d: housePath(point.x, point.y, node.settlement === "TOWN" ? 30 : 15),
-    class: "piece",
+    class: "piece" + (legalUpgrade ? " piece-upgrade" : ""),
     fill: state.colorByPlayer[node.ownerId] || "#fff",
   }), `Node ${node.id} \u2013 ${node.settlement}`);
+  if (legalUpgrade) {
+    piece.addEventListener("click", () => actions.buildOnNode(node.id));
+  }
   svg.appendChild(piece);
 
   if (node.resourcesGained && node.resourcesGained.length) {

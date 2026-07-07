@@ -1,6 +1,7 @@
 package com.ftn.sbnz.service.service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,6 +43,7 @@ public class GameService {
     private final PlayerService playerService;
     private final PlacementAdviceService placementAdviceService;
     private final ScoringService scoringService;
+    private final BuildActionService buildActionService;
     private final Random random = new Random();
 
     private List<Integer> playerIds = new ArrayList<>();
@@ -56,12 +58,14 @@ public class GameService {
     private final List<DiceRollDto> diceRolls = new ArrayList<>();
 
     public GameService(NodeService nodeService, EdgeService edgeService, PlayerService playerService,
-                       PlacementAdviceService placementAdviceService, ScoringService scoringService) {
+                       PlacementAdviceService placementAdviceService, ScoringService scoringService,
+                       BuildActionService buildActionService) {
         this.nodeService = nodeService;
         this.edgeService = edgeService;
         this.playerService = playerService;
         this.placementAdviceService = placementAdviceService;
         this.scoringService = scoringService;
+        this.buildActionService = buildActionService;
     }
 
     public synchronized BoardStateDto state() {
@@ -126,6 +130,15 @@ public class GameService {
         return buildState();
     }
 
+    public synchronized BoardStateDto build(String action, Integer nodeId, Integer edgeId) {
+        if (!isMainTurn()) {
+            throw new GameActionException(HttpStatus.CONFLICT, "You can build only after dice are rolled.");
+        }
+        Player player = playerService.getById(currentPlayerId).orElseThrow();
+        buildActionService.build(player, action, nodeId, edgeId);
+        return buildState();
+    }
+
     private void advanceToHuman() {
         while (step < STEPS.length) {
             int round = STEPS[step][0];
@@ -162,13 +175,9 @@ public class GameService {
     }
 
     private void rollDiceForCurrentPlayer() {
-        int dice1;
-        int dice2;
-        do {
-            dice1 = random.nextInt(6) + 1;
-            dice2 = random.nextInt(6) + 1;
-            lastDiceSum = dice1 + dice2;
-        } while (lastDiceSum == 7);
+        int dice1 = random.nextInt(6) + 1;
+        int dice2 = random.nextInt(6) + 1;
+        lastDiceSum = dice1 + dice2;
 
         diceRolls.add(new DiceRollDto(currentPlayerId, currentPlayerTurnIndex + 1, dice1, dice2));
         if (diceRolls.size() > playerIds.size()) {
@@ -176,7 +185,48 @@ public class GameService {
         }
 
         diceResourceNodes.clear();
+        if (lastDiceSum == 7) {
+            discardForSeven();
+            return;
+        }
         distributeDiceResources(lastDiceSum);
+    }
+
+    private boolean isMainTurn() {
+        return step >= STEPS.length && phase != null && phase.matches("TURN_P\\d+_ROLLED");
+    }
+
+    private void discardForSeven() {
+        for (Integer playerId : playerIds) {
+            playerService.getById(playerId).ifPresent(this::discardHalfIfOverSeven);
+        }
+    }
+
+    private void discardHalfIfOverSeven(Player player) {
+        List<Resource> cards = resourceCards(player);
+        if (cards.size() <= 7) {
+            return;
+        }
+
+        Collections.shuffle(cards, random);
+        int toDiscard = cards.size() / 2;
+        for (int i = 0; i < toDiscard; i++) {
+            player.removeResource(cards.get(i), 1);
+        }
+        playerService.create(player);
+    }
+
+    private List<Resource> resourceCards(Player player) {
+        List<Resource> cards = new ArrayList<>();
+        if (player.getResources() == null) {
+            return cards;
+        }
+        player.getResources().forEach((resource, count) -> {
+            for (int i = 0; i < count; i++) {
+                cards.add(resource);
+            }
+        });
+        return cards;
     }
 
     private void distributeDiceResources(int diceSum) {
@@ -204,11 +254,14 @@ public class GameService {
                 }
 
                 Player owner = node.getOwner();
-                owner.addResource(field, 1);
+                int amount = node.getSettlement() == Settlement.TOWN ? 2 : 1;
+                owner.addResource(field, amount);
                 playerService.create(owner);
 
                 List<String> gained = diceResourceNodes.getOrDefault(node.getId(), new ArrayList<>());
-                gained.add(field.getDisplayName());
+                for (int i = 0; i < amount; i++) {
+                    gained.add(field.getDisplayName());
+                }
                 diceResourceNodes.put(node.getId(), gained);
             }
         }
@@ -397,8 +450,11 @@ public class GameService {
             advices = placementAdviceService.openingAdvice(playerIds.get(2));
         }
 
+        BuildOptions buildOptions = buildOptions(players);
         return new BoardStateDto(nodeDtos, edgeDtos, playerDtos, currentPlayerId, phase,
-                lastDiceSum, new ArrayList<>(diceRolls), advices);
+                lastDiceSum, new ArrayList<>(diceRolls), advices,
+                buildOptions.actions(), buildOptions.roadEdgeIds(),
+                buildOptions.villageNodeIds(), buildOptions.townNodeIds());
     }
 
     private Map<String, Integer> playerResources(List<Player> players, int playerId) {
@@ -412,5 +468,27 @@ public class GameService {
                     resources.put(resource.getDisplayName(), count));
         }
         return resources;
+    }
+
+    private BuildOptions buildOptions(List<Player> players) {
+        if (!isMainTurn() || currentPlayerId == null) {
+            return BuildOptions.empty();
+        }
+        return players.stream()
+                .filter(player -> player.getId() == currentPlayerId)
+                .findFirst()
+                .map(player -> new BuildOptions(
+                        buildActionService.availableActions(player),
+                        buildActionService.legalRoadEdgeIds(player),
+                        buildActionService.legalVillageNodeIds(player),
+                        buildActionService.legalTownNodeIds(player)))
+                .orElseGet(BuildOptions::empty);
+    }
+
+    private record BuildOptions(List<String> actions, List<Integer> roadEdgeIds,
+                                List<Integer> villageNodeIds, List<Integer> townNodeIds) {
+        private static BuildOptions empty() {
+            return new BuildOptions(List.of(), List.of(), List.of(), List.of());
+        }
     }
 }

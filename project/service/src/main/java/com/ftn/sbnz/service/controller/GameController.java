@@ -49,6 +49,15 @@ public class GameController {
         }
     }
 
+    @PostMapping("/build")
+    public ResponseEntity<?> build(@RequestBody BuildRequest req) {
+        try {
+            return ResponseEntity.ok(gameService.build(req.action, req.nodeId, req.edgeId));
+        } catch (GameActionException ex) {
+            return ResponseEntity.status(ex.getStatus()).body(ex.getMessage());
+        }
+    }
+
     public static class PlaceRequest {
         public int nodeId;
         public int edgeId;
@@ -56,5 +65,11 @@ public class GameController {
 
     public static class NewGameRequest {
         public boolean autoOpponents = true;
+    }
+
+    public static class BuildRequest {
+        public String action;
+        public Integer nodeId;
+        public Integer edgeId;
     }
 }

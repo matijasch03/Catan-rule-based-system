@@ -136,6 +136,42 @@
     cursor: pointer;
 }
 
+.build-panel {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.build-panel[hidden] {
+    display: none;
+}
+
+.build-panel button {
+    width: 100%;
+    border: 1px solid #315064;
+    border-radius: 8px;
+    padding: 9px 12px;
+    background: #142838;
+    color: #eef3f7;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.build-panel button:not(:disabled):hover {
+    border-color: #ffd34d;
+}
+
+.build-panel button.active {
+    border-color: #ffd34d;
+    color: #ffd34d;
+}
+
+.build-panel button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
 .end-turn:disabled {
     opacity: 0.6;
     cursor: default;

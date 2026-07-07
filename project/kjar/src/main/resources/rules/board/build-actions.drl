@@ -1,0 +1,38 @@
+package rules.board
+
+import com.ftn.sbnz.model.BuildActionFact
+
+// 39. Wood + brick allow a road if the service found an open legal edge.
+rule "39 - Can build road"
+salience 30
+when
+    $action : BuildActionFact(canBuildRoad == false,
+                              wood >= 1, brick >= 1,
+                              hasOpenRoadEdge == true)
+then
+    modify($action) { setCanBuildRoad(true) }
+end
+
+// 40. The graph/path checks stay in service code; the rule only combines them
+// with the resource cost.
+rule "40 - Can build village"
+salience 20
+when
+    $action : BuildActionFact(canBuildVillage == false,
+                              wood >= 1, brick >= 1, grain >= 1, wool >= 1,
+                              connectedRoadsFromVillage >= 2,
+                              hasLegalVillageNode == true)
+then
+    modify($action) { setCanBuildVillage(true) }
+end
+
+// 41. Two grain and three ore allow upgrading an existing village.
+rule "41 - Can build town"
+salience 10
+when
+    $action : BuildActionFact(canBuildTown == false,
+                              grain >= 2, ore >= 3,
+                              hasVillageToUpgrade == true)
+then
+    modify($action) { setCanBuildTown(true) }
+end

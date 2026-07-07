@@ -2,6 +2,8 @@ import { CARD_COLOR_BY_LABEL, ICON_BY_LABEL } from "./constants.js";
 import {
   adviceListEl,
   advicePanelEl,
+  buildButtons,
+  buildPanelEl,
   dicePanelEl,
   diceRollsEl,
   endTurnBtn,
@@ -14,10 +16,11 @@ import { state } from "./state.js";
 let lastHandSignature = "";
 let shuffledHandCards = [];
 
-export function renderPanel(selectNode) {
+export function renderPanel(selectNode, buildAction) {
   renderPlayers();
   renderDiceRolls();
   renderAdvice(selectNode);
+  renderBuildActions(buildAction);
   endTurnBtn.hidden = !isMainTurn();
 }
 
@@ -128,6 +131,18 @@ function renderAdvice(selectNode) {
     button.addEventListener("click", () => selectNode(advice.nodeId));
     item.appendChild(button);
     adviceListEl.appendChild(item);
+  }
+}
+
+function renderBuildActions(buildAction) {
+  const available = new Set((state.game && state.game.availableActions) || []);
+  buildPanelEl.hidden = !isMainTurn();
+
+  for (const button of buildButtons) {
+    const action = button.dataset.action;
+    button.disabled = !available.has(action);
+    button.classList.toggle("active", state.buildMode === action);
+    button.onclick = () => buildAction(action);
   }
 }
 

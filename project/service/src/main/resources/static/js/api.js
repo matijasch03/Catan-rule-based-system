@@ -30,6 +30,14 @@ export function endTurn() {
   return getJson("/api/game/endTurn", { method: "POST" });
 }
 
+export function build(action, selection = {}) {
+  return getJson("/api/game/build", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...selection }),
+  });
+}
+
 export function reshuffleBoard() {
   return getJson("/api/board/reshuffle", { method: "POST" });
 }

@@ -1,4 +1,5 @@
 import {
+  build,
   endTurn,
   loadGameState,
   loadHexes,
@@ -6,7 +7,7 @@ import {
   placeOpeningRoad,
   reshuffleBoard,
 } from "./js/api.js";
-import { renderBoard } from "./js/boardRenderer.js";
+import { renderBoard } from "./js/boardRenderer.js?v=20260707-road-hitbox";
 import { endTurnBtn, newGameBtn, reloadBtn, selectedOpponentsMode } from "./js/dom.js";
 import { renderHand, renderPanel } from "./js/panelRenderer.js";
 import { state } from "./js/state.js";
@@ -15,6 +16,8 @@ import { describePhase, setStatus } from "./js/status.js";
 const actions = {
   selectNode,
   placeRoad,
+  buildOnEdge,
+  buildOnNode,
 };
 
 async function refreshAll(hexesPromise) {
@@ -24,13 +27,14 @@ async function refreshAll(hexesPromise) {
   ]);
   state.game = gameState;
   state.selectedNodeId = null;
+  state.buildMode = null;
   draw(hexes);
   describePhase();
 }
 
 function draw(hexes) {
   renderBoard(hexes, actions);
-  renderPanel(selectNode);
+  renderPanel(selectNode, startBuildAction);
   renderHand();
 }
 
@@ -53,6 +57,7 @@ async function run(fn, msg) {
 }
 
 function selectNode(nodeId) {
+  state.buildMode = null;
   state.selectedNodeId = nodeId;
   draw(state.lastHexes);
   describePhase();
@@ -62,9 +67,34 @@ async function placeRoad(edgeId) {
   await run(async () => {
     state.game = await placeOpeningRoad(state.selectedNodeId, edgeId);
     state.selectedNodeId = null;
+    state.buildMode = null;
     draw(state.lastHexes);
     describePhase();
   }, "Placing\u2026");
+}
+
+function startBuildAction(action) {
+  state.selectedNodeId = null;
+  state.buildMode = state.buildMode === action ? null : action;
+  draw(state.lastHexes);
+  describePhase();
+}
+
+async function buildOnEdge(edgeId) {
+  await buildAction(state.buildMode, { edgeId });
+}
+
+async function buildOnNode(nodeId) {
+  await buildAction(state.buildMode, { nodeId });
+}
+
+async function buildAction(action, selection) {
+  await run(async () => {
+    state.game = await build(action, selection);
+    state.buildMode = null;
+    draw(state.lastHexes);
+    describePhase();
+  }, "Building\u2026");
 }
 
 newGameBtn.addEventListener("click", () =>
@@ -73,6 +103,7 @@ newGameBtn.addEventListener("click", () =>
     const hexes = await loadHexes();
     state.game = await newGame(state.autoOpponents);
     state.selectedNodeId = null;
+    state.buildMode = null;
     draw(hexes);
     describePhase();
   }, "Dealing\u2026")
@@ -89,6 +120,7 @@ endTurnBtn.addEventListener("click", () =>
   run(async () => {
     state.game = await endTurn();
     state.selectedNodeId = null;
+    state.buildMode = null;
     draw(state.lastHexes);
     describePhase();
   }, "Playing the next turns\u2026")

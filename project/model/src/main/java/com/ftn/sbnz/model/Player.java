@@ -59,7 +59,9 @@ public class Player {
 
     public void removeResource(Resource resource, int amount) {
         int current = resources.getOrDefault(resource, 0);
-        if (current >= amount) {
+        if (current == amount) {
+            resources.remove(resource);
+        } else if (current > amount) {
             resources.put(resource, current - amount);
         }
     }

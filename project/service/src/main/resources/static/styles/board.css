@@ -88,6 +88,7 @@
 }
 
 .overlay .edge,
+.overlay .edge-hitbox,
 .overlay .node,
 .overlay .road,
 .overlay .piece {
@@ -115,6 +116,14 @@
 .overlay .edge-selectable:hover {
     stroke: #fff;
     stroke-width: 7;
+}
+
+.overlay .edge-hitbox {
+    stroke: transparent;
+    stroke-width: 22;
+    stroke-linecap: round;
+    pointer-events: stroke;
+    cursor: pointer;
 }
 
 .overlay .road {
@@ -160,6 +169,16 @@
 .overlay .piece {
     stroke: #08131c;
     stroke-width: 1.5;
+}
+
+.overlay .piece-upgrade {
+    cursor: pointer;
+    stroke: #ffd34d;
+    stroke-width: 3;
+}
+
+.overlay .piece-upgrade:hover {
+    stroke: #fff;
 }
 
 .overlay .res-badge {

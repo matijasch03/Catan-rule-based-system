@@ -14,6 +14,10 @@ public class BoardStateDto {
     private int lastDiceSum;
     private List<DiceRollDto> diceRolls;
     private List<AdviceDto> advices;
+    private List<String> availableActions;
+    private List<Integer> legalRoadEdgeIds;
+    private List<Integer> legalVillageNodeIds;
+    private List<Integer> legalTownNodeIds;
 
     public BoardStateDto() {
     }
@@ -21,6 +25,22 @@ public class BoardStateDto {
     public BoardStateDto(List<NodeDto> nodes, List<EdgeDto> edges, List<PlayerDto> players,
                          Integer currentPlayerId, String phase, int lastDiceSum,
                          List<DiceRollDto> diceRolls, List<AdviceDto> advices) {
+        this(nodes, edges, players, currentPlayerId, phase, lastDiceSum, diceRolls, advices, List.of());
+    }
+
+    public BoardStateDto(List<NodeDto> nodes, List<EdgeDto> edges, List<PlayerDto> players,
+                         Integer currentPlayerId, String phase, int lastDiceSum,
+                         List<DiceRollDto> diceRolls, List<AdviceDto> advices,
+                         List<String> availableActions) {
+        this(nodes, edges, players, currentPlayerId, phase, lastDiceSum, diceRolls, advices,
+                availableActions, List.of(), List.of(), List.of());
+    }
+
+    public BoardStateDto(List<NodeDto> nodes, List<EdgeDto> edges, List<PlayerDto> players,
+                         Integer currentPlayerId, String phase, int lastDiceSum,
+                         List<DiceRollDto> diceRolls, List<AdviceDto> advices,
+                         List<String> availableActions, List<Integer> legalRoadEdgeIds,
+                         List<Integer> legalVillageNodeIds, List<Integer> legalTownNodeIds) {
         this.nodes = nodes;
         this.edges = edges;
         this.players = players;
@@ -29,6 +49,10 @@ public class BoardStateDto {
         this.lastDiceSum = lastDiceSum;
         this.diceRolls = diceRolls;
         this.advices = advices;
+        this.availableActions = availableActions;
+        this.legalRoadEdgeIds = legalRoadEdgeIds;
+        this.legalVillageNodeIds = legalVillageNodeIds;
+        this.legalTownNodeIds = legalTownNodeIds;
     }
     
     // Overload for backward compatibility
@@ -45,4 +69,8 @@ public class BoardStateDto {
     public int getLastDiceSum() { return lastDiceSum; }
     public List<DiceRollDto> getDiceRolls() { return diceRolls; }
     public List<AdviceDto> getAdvices() { return advices; }
+    public List<String> getAvailableActions() { return availableActions; }
+    public List<Integer> getLegalRoadEdgeIds() { return legalRoadEdgeIds; }
+    public List<Integer> getLegalVillageNodeIds() { return legalVillageNodeIds; }
+    public List<Integer> getLegalTownNodeIds() { return legalTownNodeIds; }
 }

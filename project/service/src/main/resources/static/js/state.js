@@ -3,6 +3,7 @@ export const state = {
   game: null,
   colorByPlayer: {},
   selectedNodeId: null,
+  buildMode: null,
   lastHexes: [],
   autoOpponents: true,
 };
