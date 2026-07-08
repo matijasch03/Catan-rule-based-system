@@ -18,6 +18,7 @@ import org.kie.api.runtime.KieSession;
 
 import com.ftn.sbnz.model.Hexagon;
 import com.ftn.sbnz.model.Node;
+import com.ftn.sbnz.model.Player;
 import com.ftn.sbnz.model.Resource;
 
 class NodeScoringRuleTest {
@@ -32,8 +33,8 @@ class NodeScoringRuleTest {
 
         fireRules(node);
 
-        // Includes probability, diversity, BigYield and all matching template priorities.
-        assertEquals(19, node.getScore());
+        // Includes probability, diversity, BigYield and missing-resource demand bonuses.
+        assertEquals(56, node.getScore());
     }
 
     @Test
@@ -46,8 +47,8 @@ class NodeScoringRuleTest {
 
         fireRules(node);
 
-        // Base 14 + BigYield 2, then WOOD +50% and GRAIN +10%.
-        assertEquals(26, node.getScore());
+        // Base 14 + BigYield 2, then WOOD and GRAIN demand bonuses.
+        assertEquals(57, node.getScore());
     }
 
     @Test
@@ -100,8 +101,13 @@ class NodeScoringRuleTest {
             KieContainer kieContainer = ks.newKieContainer(ks.getRepository().getDefaultReleaseId());
             KieSession kieSession = kieContainer.newKieSession();
             try {
+                boolean hasPlayer = false;
                 for (Object fact : facts) {
+                    hasPlayer = hasPlayer || fact instanceof Player;
                     kieSession.insert(fact);
+                }
+                if (!hasPlayer) {
+                    kieSession.insert(new Player());
                 }
                 kieSession.fireAllRules();
                 List<BestNode> ranked = new ArrayList<>();

@@ -1,13 +1,37 @@
 template header
 resource
-weight
+demand
+coveredWeight
 priority
 
 package rules.board
 
+import java.util.Map;
 import com.ftn.sbnz.model.Node;
 import com.ftn.sbnz.model.Hexagon;
+import com.ftn.sbnz.model.Player;
 import com.ftn.sbnz.model.Resource;
+
+function boolean hasResourceCard(Map resources, Resource resource) {
+    if (resources == null || !resources.containsKey(resource)) {
+        return false;
+    }
+    Object value = resources.get(resource);
+    return value instanceof Number && ((Number) value).intValue() > 0;
+}
+
+function int resourceProductionScore(java.util.List hexes, Resource resource) {
+    int score = 0;
+    for (Object object : hexes) {
+        if (object instanceof Hexagon) {
+            Hexagon hex = (Hexagon) object;
+            if (hex.getField() == resource) {
+                score += diceWeight(hex.getDots());
+            }
+        }
+    }
+    return score;
+}
 
 template "Resource Priority"
 
@@ -15,13 +39,34 @@ rule "Resource Priority @{resource}"
 salience @{priority}
 no-loop true
 when
+    $player : Player($resources : resources)
     $n : Node(owner == null, available == true,
               tags contains "Scored",
               tags not contains "@{resource}",
               $currentScore : score, $hexes : adjacentHexagons)
     $h : Hexagon( field == Resource.@{resource} ) from $hexes
 then
-    int bonus = (int) Math.round($currentScore * @{weight});
+    boolean hasProducer = false;
+    for (Object object : drools.getKieRuntime().getObjects()) {
+        if (object instanceof Node) {
+            Node owned = (Node) object;
+            if (owned.getOwner() != null && owned.getOwner().getId() == $player.getId()
+                    && owned.getAdjacentHexagons() != null) {
+                for (Hexagon hex : owned.getAdjacentHexagons()) {
+                    if (hex.getField() == Resource.@{resource}) {
+                        hasProducer = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (hasProducer) {
+            break;
+        }
+    }
+    double multiplier = (hasResourceCard($resources, Resource.@{resource}) || hasProducer)
+            ? @{coveredWeight} : @{demand};
+    int bonus = (int) Math.round(resourceProductionScore($hexes, Resource.@{resource}) * multiplier);
     int newScore = Math.max(1, $currentScore + bonus);
     $n.setScore(newScore);
     $n.addTag("@{resource}");

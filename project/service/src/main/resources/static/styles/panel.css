@@ -77,6 +77,43 @@
     border-radius: 3px;
 }
 
+.swatch.advice-best {
+    border-radius: 50%;
+    background: #ff7a59;
+    box-shadow: 0 0 0 2px #ffe1d7 inset;
+}
+
+.swatch.advice-second {
+    border-radius: 50%;
+    background: #35c2ff;
+    box-shadow: 0 0 0 2px #d9f9ff inset;
+}
+
+.swatch.advice-checkpoint {
+    border-radius: 50%;
+    background: #7bd88f;
+    box-shadow: 0 0 0 2px #ecfff0 inset;
+}
+
+.swatch.advice-selected {
+    border-radius: 50%;
+    background: #ffd34d;
+}
+
+.swatch.advice-route-best {
+    background: #ff7a59;
+    height: 6px;
+    border-radius: 3px;
+    opacity: 0.8;
+}
+
+.swatch.advice-route-second {
+    background: #35c2ff;
+    height: 6px;
+    border-radius: 3px;
+    opacity: 0.8;
+}
+
 .player-score {
     white-space: nowrap;
     color: #f3c969;
@@ -101,6 +138,23 @@
 
 .advice-list li {
     padding: 3px 0;
+}
+
+.advice-details {
+    margin: 6px 0 10px;
+    padding: 8px 10px;
+    border-left: 2px solid #315064;
+    color: #c5d8e5;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.advice-details p {
+    margin: 0 0 5px;
+}
+
+.advice-details p:last-child {
+    margin-bottom: 0;
 }
 
 .advice {

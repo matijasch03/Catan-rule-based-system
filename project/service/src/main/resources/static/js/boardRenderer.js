@@ -84,13 +84,41 @@ function renderOverlay(size, actions) {
 
   const svg = svgEl("svg", { class: "overlay", width: size.width, height: size.height });
   const nodeById = Object.fromEntries(state.game.nodes.map((node) => [node.id, node]));
-  const adviceByNode = Object.fromEntries(
-    (state.game.advices || []).map((advice) => [advice.nodeId, advice])
-  );
+  const adviceByNode = adviceNodeMap(state.game.advices || []);
 
   renderEdges(svg, nodeById, actions);
+  renderAdviceRoutes(svg, nodeById, state.game.advices || []);
   renderNodes(svg, adviceByNode, actions);
   boardEl.appendChild(svg);
+}
+
+function adviceNodeMap(advices) {
+  const byNode = {};
+  for (const advice of advices) {
+    const checkpointIds = new Set(advice.checkpointNodeIds || []);
+    for (const nodeId of advice.routeNodeIds || [advice.nodeId]) {
+      if (byNode[nodeId] && byNode[nodeId].rank < advice.rank) continue;
+      byNode[nodeId] = { ...advice, checkpoint: checkpointIds.has(nodeId) };
+    }
+  }
+  return byNode;
+}
+
+function renderAdviceRoutes(svg, nodeById, advices) {
+  for (const advice of advices) {
+    const route = advice.routeNodeIds || [];
+    for (let i = 0; i < route.length - 1; i++) {
+      const a = nodeById[route[i]];
+      const b = nodeById[route[i + 1]];
+      if (!a || !b) continue;
+      const p1 = toScreen(a.x, a.y);
+      const p2 = toScreen(b.x, b.y);
+      svg.appendChild(withTitle(svgEl("line", {
+        x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
+        class: `advice-route advice-route-${advice.rank}`,
+      }), advice.description));
+    }
+  }
 }
 
 function renderEdges(svg, nodeById, actions) {
@@ -156,6 +184,7 @@ function renderNodes(svg, adviceByNode, actions) {
       cx: point.x, cy: point.y, r: 6,
       class: "node" + (selectable ? " node-pick" : "")
         + (advice ? ` node-advice-${advice.rank}` : "")
+        + (advice && advice.checkpoint ? " node-advice-checkpoint" : "")
         + (selected ? " node-selected" : ""),
     }), advice ? advice.description : `Node ${node.id}`);
     if (legalBuildVillage) {

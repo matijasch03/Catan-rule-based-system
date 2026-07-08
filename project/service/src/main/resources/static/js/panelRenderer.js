@@ -127,10 +127,37 @@ function renderAdvice(selectNode) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `advice advice-${advice.rank}`;
-    button.innerHTML = `<strong>Node ${advice.nodeId}</strong><span>Score ${advice.score}</span>`;
+    const route = advice.routeNodeIds || [advice.nodeId];
+    const first = route[0] || advice.nodeId;
+    const last = route[route.length - 1] || advice.nodeId;
+    button.innerHTML = `<strong>Nodes ${first}-${last}</strong><span>Score ${advice.score}</span>`;
     button.title = advice.description;
     button.addEventListener("click", () => selectNode(advice.nodeId));
     item.appendChild(button);
+
+    const details = document.createElement("div");
+    details.className = "advice-details";
+
+    const nodes = document.createElement("p");
+    nodes.textContent = `Recommended settlements: node ${first} and node ${last}.`;
+    details.appendChild(nodes);
+
+    const path = document.createElement("p");
+    path.textContent = `Route: ${route.join(" -> ")}.`;
+    details.appendChild(path);
+
+    const checkpoints = document.createElement("p");
+    const checkpointIds = advice.checkpointNodeIds || [];
+    checkpoints.textContent = checkpointIds.length
+      ? `Checkpoints for later villages: ${checkpointIds.join(", ")}.`
+      : "Checkpoints for later villages: none on this route.";
+    details.appendChild(checkpoints);
+
+    const reason = document.createElement("p");
+    reason.textContent = advice.description;
+    details.appendChild(reason);
+
+    item.appendChild(details);
     adviceListEl.appendChild(item);
   }
 }

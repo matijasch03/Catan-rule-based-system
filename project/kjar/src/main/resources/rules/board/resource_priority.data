@@ -1,6 +1,6 @@
-resource,weight,priority
-WOOD,0.5,25
-BRICK,0.5,24
-ORE,-0.3,23
-GRAIN,0.1,22
-WOOL,-0.4,21
+resource,demand,coveredWeight,priority
+WOOD,3.0,0.45,25
+BRICK,3.0,0.45,24
+GRAIN,2.7,0.65,23
+ORE,2.5,0.55,22
+WOOL,2.2,0.50,21

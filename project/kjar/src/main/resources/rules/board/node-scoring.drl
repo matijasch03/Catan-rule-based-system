@@ -3,7 +3,9 @@ package rules.board
 import com.ftn.sbnz.model.Hexagon;
 import com.ftn.sbnz.model.Node;
 import com.ftn.sbnz.model.Resource;
+import com.ftn.sbnz.model.SynergyPair;
 import com.ftn.sbnz.kjar.BestNode;
+import com.ftn.sbnz.kjar.NodeDistance;
 import com.ftn.sbnz.kjar.RankingRequest;
 import com.ftn.sbnz.kjar.SettlementBuilding;
 
@@ -139,4 +141,57 @@ then
     insert(new BestNode($id, $maxScore, 2));
     $request.setNextRank(3);
     update($request);
+end
+
+rule "Create synergy pair for close positive nodes"
+salience 0
+no-loop true
+when
+    $distance : NodeDistance(distance <= 4,
+                             $node1 : node1, $node2 : node2,
+                             $pathDistance : distance, $routeNodes : routeNodes,
+                             $checkPoints : checkPoints)
+    Node(this == $node1, score > 0, $score1 : score)
+    Node(this == $node2, score > 0, $score2 : score)
+    not SynergyPair(node1 == $node1, node2 == $node2)
+then
+    SynergyPair pair = new SynergyPair(0, $node1, $node2, $pathDistance, $score1 + $score2);
+    pair.setRouteNodes($routeNodes);
+    pair.setCheckPoints($checkPoints);
+    insert(pair);
+end
+
+rule "Add free path synergy bonus"
+salience -5
+no-loop true
+when
+    NodeDistance(freePath == true, $node1 : node1, $node2 : node2)
+    $pair : SynergyPair(node1 == $node1, node2 == $node2,
+                        tags not contains "FreePathBonus",
+                        $score : score)
+then
+    $pair.setScore($score + 200);
+    $pair.getNode1().setScore($pair.getNode1().getScore() + 200);
+    $pair.getNode2().setScore($pair.getNode2().getScore() + 200);
+    $pair.addTag("FreePathBonus");
+    update($pair);
+    update($pair.getNode1());
+    update($pair.getNode2());
+end
+
+rule "Add checkpoint scores to synergy pair"
+salience -10
+no-loop true
+when
+    $pair : SynergyPair(tags not contains "CheckpointScore",
+                        $checkPoints : checkPoints, $score : score)
+    eval($checkPoints != null && !$checkPoints.isEmpty())
+    $checkpointScore : Number() from accumulate(
+        Node($nodeScore : score) from $checkPoints,
+        sum($nodeScore)
+    )
+then
+    $pair.setScore($score + $checkpointScore.intValue());
+    $pair.addTag("CheckpointScore");
+    update($pair);
 end

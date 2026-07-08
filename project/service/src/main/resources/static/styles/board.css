@@ -152,18 +152,38 @@
     r: 9;
 }
 
+.overlay .advice-route {
+    stroke-linecap: round;
+    stroke-width: 7;
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.overlay .advice-route-1 {
+    stroke: #ff7a59;
+}
+
+.overlay .advice-route-2 {
+    stroke: #35c2ff;
+}
+
 .overlay .node-advice-1 {
-    fill: #ffd34d;
-    stroke: #fff3a3;
+    fill: #ff7a59;
+    stroke: #ffe1d7;
     stroke-width: 3;
     r: 9;
 }
 
 .overlay .node-advice-2 {
-    fill: #69d2e7;
+    fill: #35c2ff;
     stroke: #d9f9ff;
     stroke-width: 3;
     r: 8;
+}
+
+.overlay .node-advice-checkpoint {
+    fill: #7bd88f;
+    stroke: #ecfff0;
 }
 
 .overlay .piece {
