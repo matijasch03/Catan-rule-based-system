@@ -1,6 +1,9 @@
 package rules.board
 
 import com.ftn.sbnz.model.BuildActionFact
+import com.ftn.sbnz.kjar.GoalAdvice
+import com.ftn.sbnz.kjar.GoalNeed
+import com.ftn.sbnz.kjar.VictoryGoal
 
 // 39. Wood + brick allow a road if the service found an open legal edge.
 rule "39 - Can build road"
@@ -35,4 +38,108 @@ when
                               hasVillageToUpgrade == true)
 then
     modify($action) { setCanBuildTown(true) }
+end
+
+rule "10 VP needs towns"
+salience 0
+when
+    VictoryGoal(currentScore < targetScore)
+    not GoalNeed(type == "TOWN")
+then
+    insert(new GoalNeed("TOWN", "A town is the fastest controlled +1 VP step toward 10 points."));
+end
+
+rule "town can be built now"
+salience -10
+when
+    GoalNeed(type == "TOWN")
+    VictoryGoal(canBuildTown == true, $nodeId : bestTownNodeId, $score : bestTownNodeScore)
+    eval($nodeId != null)
+    not GoalAdvice(title == "Upgrade a village to town")
+then
+    insert(new GoalAdvice(1, "Upgrade a village to town",
+            "You already have 3 ore and 2 grain. Upgrade node " + $nodeId
+            + " first because it is your best scored village for town production (score "
+            + $score + ").",
+            $nodeId));
+end
+
+rule "town can be built now without scored target"
+salience -11
+when
+    GoalNeed(type == "TOWN")
+    VictoryGoal(canBuildTown == true, bestTownNodeId == null)
+    not GoalAdvice(title == "Upgrade a village to town")
+then
+    insert(new GoalAdvice(1, "Upgrade a village to town",
+            "You already have a village plus 3 ore and 2 grain. Upgrade now for +1 VP and move closer to 10."));
+end
+
+rule "town needs upgradeable village"
+salience -20
+when
+    GoalNeed(type == "TOWN")
+    VictoryGoal(hasVillageToUpgrade == false)
+    not GoalNeed(type == "VILLAGE")
+then
+    insert(new GoalNeed("VILLAGE",
+            "There is no village that can become a town, so first build a village and connect it with roads."));
+end
+
+rule "town needs ore and grain"
+salience -21
+when
+    GoalNeed(type == "TOWN")
+    $goal : VictoryGoal(hasVillageToUpgrade == true, canBuildTown == false,
+                        $ore : ore, $grain : grain)
+    eval($ore < 3 || $grain < 2)
+    not GoalNeed(type == "TOWN_RESOURCES")
+then
+    insert(new GoalNeed("TOWN_RESOURCES",
+            "Town is blocked by resources: need " + Math.max(0, 3 - $ore)
+            + " ore and " + Math.max(0, 2 - $grain) + " grain."));
+end
+
+rule "20 - Bank trade four same resources"
+salience -50
+when
+    VictoryGoal($wood : wood, $wool : wool, $brick : brick, $grain : grain, $ore : ore)
+    eval($wood >= 4 || $wool >= 4 || $brick >= 4 || $grain >= 4 || $ore >= 4)
+    not GoalAdvice(title == "Use 4:1 bank trade")
+then
+    insert(new GoalAdvice(6, "Use 4:1 bank trade",
+            "You have four of the same resource. Trade 4:1 with the bank for the missing resource that unlocks your town or village plan."));
+end
+
+rule "village can be built now"
+salience -55
+when
+    GoalNeed(type == "VILLAGE")
+    VictoryGoal(canBuildVillage == true)
+    not GoalAdvice(title == "Build a village")
+then
+    insert(new GoalAdvice(7, "Build a village",
+            "Build a legal village now. Prefer a spot that produces ore and grain so the next backward step is upgrading it to a town."));
+end
+
+rule "village needs two roads"
+salience -56
+when
+    GoalNeed(type == "VILLAGE")
+    VictoryGoal(canBuildVillage == false, hasLegalVillageNode == false, hasOpenRoadEdge == true)
+    not GoalAdvice(title == "Build roads toward village")
+then
+    insert(new GoalAdvice(8, "Build roads toward village",
+            "You do not have a legal village target yet. Prioritize two roads from your network toward an ore/grain node, then build the village."));
+end
+
+rule "21 - Build anything before robber risk"
+salience -70
+when
+    VictoryGoal(canBuildTown == false, totalResources > 6)
+    BuildActionFact(canBuildRoad == true || canBuildVillage == true)
+    not GoalAdvice(title == "Spend before a 7")
+then
+    insert(new GoalAdvice(12, "Spend before a 7",
+            "You have more than 6 cards and still cannot build the wanted town. Build any legal road or village now to reduce robber risk if a 7 is rolled."));
 end

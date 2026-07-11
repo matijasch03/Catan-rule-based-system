@@ -21,6 +21,7 @@ public class NodeDto {
     private boolean free;
     private Settlement settlement;
     private Integer ownerId;
+    private int score;
     // Resources gained from this vertex (only set for a second village); UI shows
     // them next to the piece.
     private List<String> resourcesGained = new ArrayList<>();
@@ -36,6 +37,7 @@ public class NodeDto {
         this.settlement = node.getSettlement();
         this.free = node.getSettlement() == null;
         this.ownerId = node.getOwner() != null ? node.getOwner().getId() : null;
+        this.score = node.getScore();
     }
 
     private static double[] position(Node node) {
@@ -63,6 +65,7 @@ public class NodeDto {
     public boolean isFree() { return free; }
     public Settlement getSettlement() { return settlement; }
     public Integer getOwnerId() { return ownerId; }
+    public int getScore() { return score; }
     public List<String> getResourcesGained() { return resourcesGained; }
     public void setResourcesGained(List<String> resourcesGained) { this.resourcesGained = resourcesGained; }
 }

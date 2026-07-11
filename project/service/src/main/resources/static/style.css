@@ -1,5 +1,5 @@
-@import url("./styles/base.css");
+@import url("./styles/base.css?v=20260708-panel-swap");
 @import url("./styles/header.css");
 @import url("./styles/hand.css");
 @import url("./styles/panel.css");
-@import url("./styles/board.css?v=20260707-road-hitbox");
+@import url("./styles/board.css?v=20260711-node-score-tooltip");

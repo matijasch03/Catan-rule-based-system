@@ -66,8 +66,23 @@ class NodeScoringRuleTest {
                 new RankingRequest());
 
         assertFalse(blockedSecond.isAvailable());
+        assertEquals(22, blockedSecond.getScore());
         assertEquals(List.of(1, 3), ranked.stream().map(BestNode::getNodeId).toList());
         assertEquals(List.of(1, 2), ranked.stream().map(BestNode::getRank).toList());
+    }
+
+    @Test
+    void freePathBonusDoesNotInflateEndpointNodeScores() {
+        Node first = createNode(new Hexagon(0, 0, Resource.WOOD, 8, null));
+        Node second = createNode(new Hexagon(1, 0, Resource.BRICK, 6, null));
+        setId(first, 1);
+        setId(second, 2);
+
+        fireRules(first, second,
+                new NodeDistance(first, second, 2, true, List.of(first, second), List.of()));
+
+        assertEquals(22, first.getScore());
+        assertEquals(22, second.getScore());
     }
 
     private static Node createNode(Hexagon... hexagons) {

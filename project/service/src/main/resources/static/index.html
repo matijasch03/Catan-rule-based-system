@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Catan Board</title>
-    <link rel="stylesheet" href="style.css?v=20260708-advice-details" />
+    <link rel="stylesheet" href="style.css?v=20260711-node-score-tooltip" />
 </head>
 <body>
     <header>
@@ -30,14 +30,9 @@
             </section>
         </div>
 
-        <aside class="panel">
+        <aside class="panel game-panel-column">
             <h2>Players</h2>
             <ul id="players" class="players"></ul>
-
-            <section id="advice-panel" hidden>
-                <h2>Opening advice</h2>
-                <ol id="advice-list" class="advice-list"></ol>
-            </section>
 
             <h2>Pieces</h2>
             <ul class="legend">
@@ -66,8 +61,20 @@
                 <div id="dice-rolls" class="dice-rolls"></div>
             </section>
         </aside>
+
+        <aside id="advice-column" class="panel advice-panel-column" hidden>
+            <section id="advice-panel" hidden>
+                <h2>Opening advice</h2>
+                <ol id="advice-list" class="advice-list"></ol>
+            </section>
+
+            <section id="goal-panel" hidden>
+                <h2>10 VP plan</h2>
+                <ol id="goal-list" class="goal-list"></ol>
+            </section>
+        </aside>
     </main>
 
-    <script type="module" src="app.js?v=20260708-advice-details"></script>
+    <script type="module" src="app.js?v=20260711-node-score-tooltip"></script>
 </body>
 </html>

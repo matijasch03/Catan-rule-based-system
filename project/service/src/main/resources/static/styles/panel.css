@@ -1,10 +1,26 @@
 .panel {
-    flex: 0 0 340px;
-    width: 340px;
+    width: 100%;
     background: #0c1822;
     border: 1px solid #1f3445;
     border-radius: 12px;
-    padding: 16px 20px;
+    padding: 14px 16px;
+    max-height: calc(100vh - 116px);
+    overflow-y: auto;
+}
+
+.panel[hidden] {
+    display: none;
+}
+
+.advice-panel-column {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.advice-panel-column section[hidden],
+.game-panel-column section[hidden] {
+    display: none;
 }
 
 .panel h2 {
@@ -12,7 +28,7 @@
     text-transform: uppercase;
     letter-spacing: 1px;
     color: #7f99ab;
-    margin: 18px 0 8px;
+    margin: 14px 0 8px;
 }
 
 .panel h2:first-child {
@@ -26,13 +42,19 @@
     padding: 0;
 }
 
+.legend {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 10px;
+}
+
 .players li,
 .legend li {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 4px 0;
-    font-size: 14px;
+    padding: 3px 0;
+    font-size: 13px;
 }
 
 .players li {
@@ -133,24 +155,26 @@
 
 .advice-list {
     margin: 0;
-    padding-left: 22px;
+    padding-left: 0;
+    list-style: none;
 }
 
 .advice-list li {
-    padding: 3px 0;
+    padding: 0;
+    margin-bottom: 10px;
 }
 
 .advice-details {
-    margin: 6px 0 10px;
-    padding: 8px 10px;
+    margin: 5px 0 0;
+    padding: 7px 9px;
     border-left: 2px solid #315064;
     color: #c5d8e5;
-    font-size: 12px;
-    line-height: 1.35;
+    font-size: 11px;
+    line-height: 1.3;
 }
 
 .advice-details p {
-    margin: 0 0 5px;
+    margin: 0 0 4px;
 }
 
 .advice-details p:last-child {
@@ -164,18 +188,73 @@
     gap: 8px;
     border: 1px solid #315064;
     border-radius: 7px;
-    padding: 7px 9px;
+    padding: 7px 8px;
     background: #142838;
     color: #eef3f7;
     cursor: pointer;
 }
 
 .advice-1 {
-    border-color: #ffd34d;
+    border-color: #e53935;
+}
+
+.advice-2 {
+    border-color: #1e88e5;
 }
 
 .advice span {
     color: #9fc0d5;
+}
+
+.goal-list {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.goal-list li {
+    padding: 8px 0;
+    border-bottom: 1px solid #1f3445;
+}
+
+.goal-list li:last-child {
+    border-bottom: 0;
+}
+
+.goal-list strong {
+    display: block;
+    color: #eef3f7;
+    font-size: 13px;
+}
+
+.goal-list p {
+    margin: 4px 0 0;
+    color: #c5d8e5;
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+.trade-advice-btn {
+    margin-top: 8px;
+    border: 1px solid #5aa2c8;
+    border-radius: 7px;
+    padding: 7px 10px;
+    background: #123044;
+    color: #eef3f7;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+@media (max-width: 1040px) {
+    .panel {
+        max-width: 640px;
+        max-height: none;
+    }
+}
+
+.trade-advice-btn:hover {
+    border-color: #ffd34d;
+    color: #ffd34d;
 }
 
 .end-turn {
@@ -192,9 +271,9 @@
 
 .build-panel {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 10px;
 }
 
 .build-panel[hidden] {
@@ -205,7 +284,8 @@
     width: 100%;
     border: 1px solid #315064;
     border-radius: 8px;
-    padding: 9px 12px;
+    min-height: 40px;
+    padding: 8px 8px;
     background: #142838;
     color: #eef3f7;
     font-weight: 700;
@@ -232,7 +312,7 @@
 }
 
 .dice-panel {
-    margin-top: 18px;
+    margin-top: 14px;
     border-top: 1px solid #1f3445;
 }
 

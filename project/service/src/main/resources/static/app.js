@@ -4,12 +4,13 @@ import {
   loadGameState,
   loadHexes,
   newGame,
+  offerTrade,
   placeOpeningRoad,
   reshuffleBoard,
 } from "./js/api.js";
-import { renderBoard } from "./js/boardRenderer.js?v=20260707-turn-steps";
+import { renderBoard } from "./js/boardRenderer.js?v=20260711-node-score-tooltip";
 import { endTurnBtn, newGameBtn, reloadBtn, selectedOpponentsMode } from "./js/dom.js";
-import { renderHand, renderPanel } from "./js/panelRenderer.js?v=20260707-turn-steps";
+import { renderHand, renderPanel } from "./js/panelRenderer.js?v=20260709-trade-flow";
 import { state } from "./js/state.js";
 import { describePhase, setStatus } from "./js/status.js?v=20260707-turn-steps";
 
@@ -34,7 +35,7 @@ async function refreshAll(hexesPromise) {
 
 function draw(hexes) {
   renderBoard(hexes, actions);
-  renderPanel(selectNode, startBuildAction);
+  renderPanel(selectNode, startBuildAction, tradeAction);
   renderHand();
 }
 
@@ -57,10 +58,27 @@ async function run(fn, msg) {
 }
 
 function selectNode(nodeId) {
+  if (!isOpeningPlaceable(nodeId)) {
+    setStatus("That spot is taken or too close to another village.");
+    return;
+  }
   state.buildMode = null;
   state.selectedNodeId = nodeId;
   draw(state.lastHexes);
   describePhase();
+}
+
+function isOpeningPlaceable(nodeId) {
+  const game = state.game;
+  if (!game || state.buildMode === "VILLAGE") return true;
+  const node = (game.nodes || []).find((candidate) => candidate.id === nodeId);
+  if (!node || node.settlement) return false;
+  return !(game.edges || []).some((edge) => {
+    if (edge.node1Id !== nodeId && edge.node2Id !== nodeId) return false;
+    const otherId = edge.node1Id === nodeId ? edge.node2Id : edge.node1Id;
+    const other = (game.nodes || []).find((candidate) => candidate.id === otherId);
+    return other && other.settlement;
+  });
 }
 
 async function placeRoad(edgeId) {
@@ -95,6 +113,14 @@ async function buildAction(action, selection) {
     draw(state.lastHexes);
     describePhase();
   }, "Building\u2026");
+}
+
+async function tradeAction(trade) {
+  await run(async () => {
+    state.game = await offerTrade(trade);
+    draw(state.lastHexes);
+    describePhase();
+  }, "Trading...");
 }
 
 newGameBtn.addEventListener("click", () =>

@@ -85,10 +85,11 @@ function renderOverlay(size, actions) {
   const svg = svgEl("svg", { class: "overlay", width: size.width, height: size.height });
   const nodeById = Object.fromEntries(state.game.nodes.map((node) => [node.id, node]));
   const adviceByNode = adviceNodeMap(state.game.advices || []);
+  const goalAdviceByNode = goalAdviceNodeMap(state.game.goalAdvices || []);
 
   renderEdges(svg, nodeById, actions);
   renderAdviceRoutes(svg, nodeById, state.game.advices || []);
-  renderNodes(svg, adviceByNode, actions);
+  renderNodes(svg, adviceByNode, goalAdviceByNode, actions);
   boardEl.appendChild(svg);
 }
 
@@ -96,17 +97,40 @@ function adviceNodeMap(advices) {
   const byNode = {};
   for (const advice of advices) {
     const checkpointIds = new Set(advice.checkpointNodeIds || []);
-    for (const nodeId of advice.routeNodeIds || [advice.nodeId]) {
-      if (byNode[nodeId] && byNode[nodeId].rank < advice.rank) continue;
-      byNode[nodeId] = { ...advice, checkpoint: checkpointIds.has(nodeId) };
+    const route = adviceRoute(advice);
+    const firstEndpoint = route[0];
+    const secondEndpoint = route[route.length - 1];
+    const endpointIds = new Set([firstEndpoint, secondEndpoint, advice.nodeId].filter(Boolean));
+    const openingPair = (advice.tags || []).includes("OpeningPair");
+    for (const nodeId of route) {
+      const markerRank = openingPair && nodeId === secondEndpoint && secondEndpoint !== firstEndpoint
+        ? 2
+        : advice.rank;
+      if (byNode[nodeId] && byNode[nodeId].rank < markerRank) continue;
+      byNode[nodeId] = {
+        ...advice,
+        rank: markerRank,
+        checkpoint: checkpointIds.has(nodeId),
+        endpoint: endpointIds.has(nodeId),
+      };
     }
+  }
+  return byNode;
+}
+
+function goalAdviceNodeMap(advices) {
+  const byNode = {};
+  for (const advice of advices) {
+    if (!advice.nodeId) continue;
+    if (advice.title !== "Upgrade a village to town") continue;
+    byNode[advice.nodeId] = advice;
   }
   return byNode;
 }
 
 function renderAdviceRoutes(svg, nodeById, advices) {
   for (const advice of advices) {
-    const route = advice.routeNodeIds || [];
+    const route = adviceRoute(advice);
     for (let i = 0; i < route.length - 1; i++) {
       const a = nodeById[route[i]];
       const b = nodeById[route[i + 1]];
@@ -119,6 +143,19 @@ function renderAdviceRoutes(svg, nodeById, advices) {
       }), advice.description));
     }
   }
+}
+
+function adviceRoute(advice) {
+  const route = Array.isArray(advice.routeNodeIds)
+    ? advice.routeNodeIds.filter(Boolean)
+    : [];
+  if (!route.length && advice.nodeId) {
+    return [advice.nodeId];
+  }
+  if (advice.nodeId && !route.includes(advice.nodeId)) {
+    return [advice.nodeId, ...route];
+  }
+  return route;
 }
 
 function renderEdges(svg, nodeById, actions) {
@@ -164,18 +201,22 @@ function renderEdges(svg, nodeById, actions) {
   }
 }
 
-function renderNodes(svg, adviceByNode, actions) {
+function renderNodes(svg, adviceByNode, goalAdviceByNode, actions) {
   const isUserTurn = isHumanTurn();
   const legalVillageNodes = new Set(state.game.legalVillageNodeIds || []);
   for (const node of state.game.nodes) {
     const point = toScreen(node.x, node.y);
 
     if (node.settlement) {
-      renderSettlement(svg, node, point, actions);
+      renderSettlement(svg, node, point, goalAdviceByNode[node.id], actions);
       continue;
     }
 
-    const openingSelectable = isUserTurn && state.selectedNodeId == null && state.buildMode == null;
+    const openingSelectable =
+      isUserTurn
+      && state.selectedNodeId == null
+      && state.buildMode == null
+      && isOpeningPlaceable(node);
     const legalBuildVillage = state.buildMode === "VILLAGE" && legalVillageNodes.has(node.id);
     const selectable = openingSelectable || legalBuildVillage;
     const selected = node.id === state.selectedNodeId;
@@ -184,9 +225,10 @@ function renderNodes(svg, adviceByNode, actions) {
       cx: point.x, cy: point.y, r: 6,
       class: "node" + (selectable ? " node-pick" : "")
         + (advice ? ` node-advice-${advice.rank}` : "")
+        + (advice && advice.endpoint ? " node-advice-endpoint" : "")
         + (advice && advice.checkpoint ? " node-advice-checkpoint" : "")
         + (selected ? " node-selected" : ""),
-    }), advice ? advice.description : `Node ${node.id}`);
+    }), nodeTitle(node, advice));
     if (legalBuildVillage) {
       marker.addEventListener("click", () => actions.buildOnNode(node.id));
     } else if (openingSelectable) {
@@ -196,14 +238,33 @@ function renderNodes(svg, adviceByNode, actions) {
   }
 }
 
-function renderSettlement(svg, node, point, actions) {
+function isOpeningPlaceable(node) {
+  if (node.settlement) return false;
+  return !(state.game.edges || []).some((edge) => {
+    if (edge.node1Id !== node.id && edge.node2Id !== node.id) return false;
+    const otherId = edge.node1Id === node.id ? edge.node2Id : edge.node1Id;
+    const other = (state.game.nodes || []).find((candidate) => candidate.id === otherId);
+    return other && other.settlement;
+  });
+}
+
+function nodeTitle(node, advice = null) {
+  const base = `Node ${node.id} | Score: ${node.score ?? 0}`;
+  if (!advice) return base;
+  return `${base} | ${advice.description}`;
+}
+
+function renderSettlement(svg, node, point, goalAdvice, actions) {
   const legalTownNodes = new Set(state.game.legalTownNodeIds || []);
   const legalUpgrade = state.buildMode === "TOWN" && legalTownNodes.has(node.id);
+  const recommendedTown = goalAdvice && goalAdvice.title === "Upgrade a village to town";
   const piece = withTitle(svgEl("path", {
     d: housePath(point.x, point.y, node.settlement === "TOWN" ? 30 : 15),
-    class: "piece" + (legalUpgrade ? " piece-upgrade" : ""),
+    class: "piece"
+      + (legalUpgrade ? " piece-upgrade" : "")
+      + (recommendedTown ? " piece-town-recommendation" : ""),
     fill: state.colorByPlayer[node.ownerId] || "#fff",
-  }), `Node ${node.id} \u2013 ${node.settlement}`);
+  }), `${nodeTitle(node)} | ${node.settlement}${recommendedTown ? ` | ${goalAdvice.description}` : ""}`);
   if (legalUpgrade) {
     piece.addEventListener("click", () => actions.buildOnNode(node.id));
   }

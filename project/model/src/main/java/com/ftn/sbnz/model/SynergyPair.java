@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Transient;
 
 @Entity
@@ -43,7 +44,13 @@ public class SynergyPair {
     @Transient
     private Set<String> tags = new HashSet<>();
 
-    @Transient
+    @ManyToMany
+    @JoinTable(
+        name = "synergy_pair_route_nodes",
+        joinColumns = @JoinColumn(name = "synergy_pair_id"),
+        inverseJoinColumns = @JoinColumn(name = "node_id")
+    )
+    @OrderColumn(name = "route_order")
     private List<Node> routeNodes = new ArrayList<>();
     
     public SynergyPair() {

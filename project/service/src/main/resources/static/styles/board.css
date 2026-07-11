@@ -154,31 +154,35 @@
 
 .overlay .advice-route {
     stroke-linecap: round;
-    stroke-width: 7;
-    opacity: 0.55;
+    stroke-width: 10;
+    opacity: 0.86;
     pointer-events: none;
 }
 
 .overlay .advice-route-1 {
-    stroke: #ff7a59;
+    stroke: #e53935;
 }
 
 .overlay .advice-route-2 {
-    stroke: #35c2ff;
+    stroke: #1e88e5;
 }
 
 .overlay .node-advice-1 {
-    fill: #ff7a59;
-    stroke: #ffe1d7;
-    stroke-width: 3;
-    r: 9;
+    fill: #e53935;
+    stroke: #ffd6d3;
+    stroke-width: 4;
+    r: 10;
 }
 
 .overlay .node-advice-2 {
-    fill: #35c2ff;
-    stroke: #d9f9ff;
-    stroke-width: 3;
-    r: 8;
+    fill: #1e88e5;
+    stroke: #d6ecff;
+    stroke-width: 4;
+    r: 9;
+}
+
+.overlay .node-advice-endpoint {
+    r: 12;
 }
 
 .overlay .node-advice-checkpoint {
@@ -199,6 +203,12 @@
 
 .overlay .piece-upgrade:hover {
     stroke: #fff;
+}
+
+.overlay .piece-town-recommendation {
+    stroke: #ff2fb3;
+    stroke-width: 4;
+    filter: drop-shadow(0 0 7px rgba(255, 47, 179, 0.9));
 }
 
 .overlay .res-badge {

@@ -58,6 +58,15 @@ public class GameController {
         }
     }
 
+    @PostMapping("/trade")
+    public ResponseEntity<?> trade(@RequestBody(required = false) TradeRequest req) {
+        try {
+            return ResponseEntity.ok(gameService.offerTrade(req));
+        } catch (GameActionException ex) {
+            return ResponseEntity.status(ex.getStatus()).body(ex.getMessage());
+        }
+    }
+
     public static class PlaceRequest {
         public int nodeId;
         public int edgeId;
@@ -71,5 +80,14 @@ public class GameController {
         public String action;
         public Integer nodeId;
         public Integer edgeId;
+    }
+
+    public static class TradeRequest {
+        public String title;
+        public boolean bankTrade;
+        public Integer opponentId;
+        public String wantedResource;
+        public String offeredResource;
+        public int offeredAmount = 1;
     }
 }

@@ -53,12 +53,11 @@ then
     update($node);
 end
 
-rule "Calculate free node probability score"
+rule "Calculate node probability score"
 salience 50
 no-loop true
 when
-    $node : Node(owner == null, available == true,
-                 tags not contains "Scored", $hexes : adjacentHexagons)
+    $node : Node(tags not contains "Scored", $hexes : adjacentHexagons)
     $baseScore : Number() from accumulate(
         Hexagon($dots : dots) from $hexes,
         sum(diceWeight($dots))
@@ -73,8 +72,7 @@ rule "Add diversity bonus"
 salience 40
 no-loop true
 when
-    $node : Node(owner == null, available == true,
-                 tags contains "Scored", tags not contains "Diversity",
+    $node : Node(tags contains "Scored", tags not contains "Diversity",
                  $score : score, $hexes : adjacentHexagons)
     $resources : java.util.Set(size > 2) from accumulate(
         Hexagon(field != null, field != Resource.DESERT, $resource : field) from $hexes,
@@ -90,8 +88,7 @@ rule "Add BigYield tag and fixed bonus"
 salience 30
 no-loop true
 when
-    $node : Node(owner == null, available == true,
-                 tags contains "Scored", tags not contains "BigYield",
+    $node : Node(tags contains "Scored", tags not contains "BigYield",
                  $score : score, $hexes : adjacentHexagons)
     exists Hexagon(dots == 6 || dots == 8) from $hexes
 then
@@ -147,7 +144,7 @@ rule "Create synergy pair for close positive nodes"
 salience 0
 no-loop true
 when
-    $distance : NodeDistance(distance <= 4,
+    $distance : NodeDistance(distance <= 6,
                              $node1 : node1, $node2 : node2,
                              $pathDistance : distance, $routeNodes : routeNodes,
                              $checkPoints : checkPoints)
@@ -171,12 +168,8 @@ when
                         $score : score)
 then
     $pair.setScore($score + 200);
-    $pair.getNode1().setScore($pair.getNode1().getScore() + 200);
-    $pair.getNode2().setScore($pair.getNode2().getScore() + 200);
     $pair.addTag("FreePathBonus");
     update($pair);
-    update($pair.getNode1());
-    update($pair.getNode2());
 end
 
 rule "Add checkpoint scores to synergy pair"

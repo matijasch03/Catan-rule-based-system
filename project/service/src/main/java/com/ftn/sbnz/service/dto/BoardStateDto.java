@@ -14,6 +14,7 @@ public class BoardStateDto {
     private int lastDiceSum;
     private List<DiceRollDto> diceRolls;
     private List<AdviceDto> advices;
+    private List<GoalAdviceDto> goalAdvices;
     private List<String> availableActions;
     private List<Integer> legalRoadEdgeIds;
     private List<Integer> legalVillageNodeIds;
@@ -50,6 +51,7 @@ public class BoardStateDto {
         this.lastDiceSum = lastDiceSum;
         this.diceRolls = diceRolls;
         this.advices = advices;
+        this.goalAdvices = List.of();
         this.availableActions = availableActions;
         this.legalRoadEdgeIds = legalRoadEdgeIds;
         this.legalVillageNodeIds = legalVillageNodeIds;
@@ -64,7 +66,19 @@ public class BoardStateDto {
                          List<Integer> legalVillageNodeIds, List<Integer> legalTownNodeIds,
                          String turnMessage) {
         this(nodes, edges, players, currentPlayerId, phase, lastDiceSum, diceRolls, advices,
+                List.of(), availableActions, legalRoadEdgeIds, legalVillageNodeIds, legalTownNodeIds,
+                turnMessage);
+    }
+
+    public BoardStateDto(List<NodeDto> nodes, List<EdgeDto> edges, List<PlayerDto> players,
+                         Integer currentPlayerId, String phase, int lastDiceSum,
+                         List<DiceRollDto> diceRolls, List<AdviceDto> advices,
+                         List<GoalAdviceDto> goalAdvices, List<String> availableActions,
+                         List<Integer> legalRoadEdgeIds, List<Integer> legalVillageNodeIds,
+                         List<Integer> legalTownNodeIds, String turnMessage) {
+        this(nodes, edges, players, currentPlayerId, phase, lastDiceSum, diceRolls, advices,
                 availableActions, legalRoadEdgeIds, legalVillageNodeIds, legalTownNodeIds);
+        this.goalAdvices = goalAdvices;
         this.turnMessage = turnMessage;
     }
     
@@ -82,6 +96,7 @@ public class BoardStateDto {
     public int getLastDiceSum() { return lastDiceSum; }
     public List<DiceRollDto> getDiceRolls() { return diceRolls; }
     public List<AdviceDto> getAdvices() { return advices; }
+    public List<GoalAdviceDto> getGoalAdvices() { return goalAdvices; }
     public List<String> getAvailableActions() { return availableActions; }
     public List<Integer> getLegalRoadEdgeIds() { return legalRoadEdgeIds; }
     public List<Integer> getLegalVillageNodeIds() { return legalVillageNodeIds; }

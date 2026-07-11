@@ -1,7 +1,8 @@
 export async function getJson(url, opts) {
   const res = await fetch(url, opts);
   if (!res.ok) {
-    throw new Error(`${(opts && opts.method) || "GET"} ${url} -> ${res.status}`);
+    const message = await res.text();
+    throw new Error(message || `${(opts && opts.method) || "GET"} ${url} -> ${res.status}`);
   }
   return res.json();
 }
@@ -35,6 +36,14 @@ export function build(action, selection = {}) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, ...selection }),
+  });
+}
+
+export function offerTrade(trade) {
+  return getJson("/api/game/trade", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(trade),
   });
 }
 

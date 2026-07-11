@@ -40,8 +40,7 @@ salience @{priority}
 no-loop true
 when
     $player : Player($resources : resources)
-    $n : Node(owner == null, available == true,
-              tags contains "Scored",
+    $n : Node(owner == null, tags contains "Scored",
               tags not contains "@{resource}",
               $currentScore : score, $hexes : adjacentHexagons)
     $h : Hexagon( field == Resource.@{resource} ) from $hexes

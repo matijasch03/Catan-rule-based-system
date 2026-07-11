@@ -66,6 +66,17 @@ public class ServiceApplication {
 				services.getResources().newByteArrayResource(
 						priorityRules.getBytes(StandardCharsets.UTF_8)));
 
+		String tradeAdviceRules;
+		try (InputStream template = ResourcePriorityTemplateCompiler.class.getClassLoader()
+				.getResourceAsStream("rules/board/trade_advice.drt");
+			 InputStream data = ResourcePriorityTemplateCompiler.class.getClassLoader()
+				.getResourceAsStream("rules/board/trade_advice.data")) {
+			tradeAdviceRules = ResourcePriorityTemplateCompiler.compile(template, data);
+		}
+		fileSystem.write("src/main/resources/rules/board/trade-advice-generated.drl",
+				services.getResources().newByteArrayResource(
+						tradeAdviceRules.getBytes(StandardCharsets.UTF_8)));
+
 		var builder = services.newKieBuilder(fileSystem).buildAll();
 		Results results = builder.getResults();
 		if (results.hasMessages(Message.Level.ERROR)) {

@@ -70,6 +70,13 @@ public class BuildActionService {
         return villagesToUpgrade(player.getId()).stream().map(Node::getId).toList();
     }
 
+    public List<Node> legalTownTargets(Player player) {
+        if (!evaluate(player).isCanBuildTown()) {
+            return List.of();
+        }
+        return villagesToUpgrade(player.getId());
+    }
+
     public void build(Player player, String action, Integer nodeId, Integer edgeId) {
         switch (action == null ? "" : action.toUpperCase()) {
             case ROAD -> buildRoad(player, edgeId);
@@ -79,7 +86,7 @@ public class BuildActionService {
         }
     }
 
-    private BuildActionFact evaluate(Player player) {
+    public BuildActionFact evaluate(Player player) {
         BuildActionFact fact = new BuildActionFact(player.getId());
         fact.setWood(resourceCount(player, Resource.WOOD));
         fact.setWool(resourceCount(player, Resource.WOOL));
@@ -99,6 +106,10 @@ public class BuildActionService {
             session.dispose();
         }
         return fact;
+    }
+
+    public List<Node> legalVillageTargets(Player player) {
+        return legalVillageNodes(player.getId());
     }
 
     private void buildRoad(Player player, Integer edgeId) {

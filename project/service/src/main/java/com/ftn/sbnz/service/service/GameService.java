@@ -14,6 +14,8 @@ import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import com.ftn.sbnz.model.BuildActionFact;
+import com.ftn.sbnz.kjar.GoalAdvice;
 import com.ftn.sbnz.model.Edge;
 import com.ftn.sbnz.model.Hexagon;
 import com.ftn.sbnz.model.Node;
@@ -21,12 +23,15 @@ import com.ftn.sbnz.model.Player;
 import com.ftn.sbnz.model.PlayerScoreFact;
 import com.ftn.sbnz.model.Resource;
 import com.ftn.sbnz.model.Settlement;
+import com.ftn.sbnz.service.controller.GameController.TradeRequest;
 import com.ftn.sbnz.service.dto.AdviceDto;
 import com.ftn.sbnz.service.dto.BoardStateDto;
 import com.ftn.sbnz.service.dto.DiceRollDto;
 import com.ftn.sbnz.service.dto.EdgeDto;
+import com.ftn.sbnz.service.dto.GoalAdviceDto;
 import com.ftn.sbnz.service.dto.NodeDto;
 import com.ftn.sbnz.service.dto.PlayerDto;
+import com.ftn.sbnz.service.dto.TradeProposalDto;
 
 @Service
 public class GameService {
@@ -44,6 +49,9 @@ public class GameService {
     private final PlacementAdviceService placementAdviceService;
     private final ScoringService scoringService;
     private final BuildActionService buildActionService;
+    private final GoalPlanningService goalPlanningService;
+    private final AdviceService adviceService;
+    private final SynergyPairService synergyPairService;
     private final Random random = new Random();
 
     private List<Integer> playerIds = new ArrayList<>();
@@ -57,20 +65,34 @@ public class GameService {
     private int lastDiceSum = 0;
     private final List<DiceRollDto> diceRolls = new ArrayList<>();
     private String turnMessage = "";
+    private boolean tradeAttempted = false;
+    private boolean tradeRefused = false;
 
     public GameService(NodeService nodeService, EdgeService edgeService, PlayerService playerService,
                        PlacementAdviceService placementAdviceService, ScoringService scoringService,
-                       BuildActionService buildActionService) {
+                       BuildActionService buildActionService, GoalPlanningService goalPlanningService,
+                       AdviceService adviceService, SynergyPairService synergyPairService) {
         this.nodeService = nodeService;
         this.edgeService = edgeService;
         this.playerService = playerService;
         this.placementAdviceService = placementAdviceService;
         this.scoringService = scoringService;
         this.buildActionService = buildActionService;
+        this.goalPlanningService = goalPlanningService;
+        this.adviceService = adviceService;
+        this.synergyPairService = synergyPairService;
     }
 
     public synchronized BoardStateDto state() {
+        if (needsFreshGame()) {
+            return newGame(autoOpponents);
+        }
         return buildState();
+    }
+
+    private boolean needsFreshGame() {
+        return playerIds.isEmpty()
+                || ("IDLE".equals(phase) && currentPlayerId == null && step == 0);
     }
 
     public synchronized BoardStateDto newGame(boolean autoOpponents) {
@@ -110,6 +132,7 @@ public class GameService {
         Player player = playerService.getById(currentPlayerId).orElseThrow();
         placeVillage(node, player);
         placeRoad(edge, player);
+        placementAdviceService.updatePersistedRoutes(player.getId());
 
         if (round == 2) {
             grantResources(node, player);
@@ -161,8 +184,85 @@ public class GameService {
         }
         Player player = playerService.getById(currentPlayerId).orElseThrow();
         buildActionService.build(player, action, nodeId, edgeId);
+        if (BuildActionService.ROAD.equalsIgnoreCase(action)) {
+            placementAdviceService.updatePersistedRoutes(player.getId());
+        }
         turnMessage = playerLabel(currentPlayerTurnIndex + 1) + " built " + action.toLowerCase() + ".";
         return buildState();
+    }
+
+    public synchronized BoardStateDto offerTrade(TradeRequest request) {
+        if (!isMainTurn() || !isUserControlledCurrentPlayer()) {
+            throw new GameActionException(HttpStatus.CONFLICT, "You can offer trades only on your turn after dice are rolled.");
+        }
+        tradeAttempted = true;
+        tradeRefused = false;
+        Player player = playerService.getById(currentPlayerId).orElseThrow();
+        if (request == null || request.wantedResource == null || request.offeredResource == null) {
+            turnMessage = "Trade proposal noted, but no concrete resource exchange was selected.";
+            return buildState();
+        }
+
+        Resource wanted = parseResource(request.wantedResource);
+        Resource offered = parseResource(request.offeredResource);
+        int offeredAmount = Math.max(1, request.offeredAmount);
+
+        if (request.bankTrade) {
+            executeBankTrade(player, offered, wanted, offeredAmount);
+        } else {
+            executeOpponentTrade(player, request.opponentId, offered, wanted, offeredAmount);
+        }
+        return buildState();
+    }
+
+    private void executeOpponentTrade(Player player, Integer opponentId, Resource offered,
+                                      Resource wanted, int offeredAmount) {
+        if (opponentId == null) {
+            throw new GameActionException(HttpStatus.BAD_REQUEST, "Choose an opponent for this trade.");
+        }
+        Player opponent = playerService.getById(opponentId)
+                .orElseThrow(() -> new GameActionException(HttpStatus.BAD_REQUEST, "Unknown opponent."));
+        if (resourceCount(player, offered) < offeredAmount) {
+            throw new GameActionException(HttpStatus.BAD_REQUEST, "You no longer have enough " + offered.getDisplayName() + " to trade.");
+        }
+        if (resourceCount(opponent, wanted) < 1) {
+            throw new GameActionException(HttpStatus.BAD_REQUEST, playerLabel(playerNumber(opponent.getId()))
+                    + " no longer has " + wanted.getDisplayName() + ".");
+        }
+
+        int acceptanceChance = offeredAmount >= 2 ? 85 : 65;
+        if (random.nextInt(100) >= acceptanceChance) {
+            tradeRefused = true;
+            turnMessage = playerLabel(playerNumber(opponent.getId()))
+                    + " refused your offer: " + amountLabel(offeredAmount, offered)
+                    + " for 1 " + wanted.getDisplayName() + ".";
+            return;
+        }
+
+        player.removeResource(offered, offeredAmount);
+        player.addResource(wanted, 1);
+        opponent.removeResource(wanted, 1);
+        opponent.addResource(offered, offeredAmount);
+        playerService.create(player);
+        playerService.create(opponent);
+        tradeRefused = false;
+        turnMessage = playerLabel(playerNumber(opponent.getId()))
+                + " accepted your offer. Trade completed: you gave " + amountLabel(offeredAmount, offered)
+                + " to " + playerLabel(playerNumber(opponent.getId()))
+                + " and received 1 " + wanted.getDisplayName() + ".";
+    }
+
+    private void executeBankTrade(Player player, Resource offered, Resource wanted, int offeredAmount) {
+        int amount = Math.max(4, offeredAmount);
+        if (resourceCount(player, offered) < amount) {
+            throw new GameActionException(HttpStatus.BAD_REQUEST, "You need " + amount + " "
+                    + offered.getDisplayName() + " for this bank trade.");
+        }
+        player.removeResource(offered, amount);
+        player.addResource(wanted, 1);
+        playerService.create(player);
+        turnMessage = "Bank trade completed: you gave " + amountLabel(amount, offered)
+                + " and received 1 " + wanted.getDisplayName() + ".";
     }
 
     private void advanceToHuman() {
@@ -170,6 +270,7 @@ public class GameService {
             int round = STEPS[step][0];
             int idx = STEPS[step][1];
             if (isHuman(idx)) {
+                currentPlayerTurnIndex = idx;
                 currentPlayerId = playerIds.get(idx);
                 phase = "R" + round + "_P" + (idx + 1);
                 return;
@@ -235,6 +336,8 @@ public class GameService {
 
     private void startCurrentTurn() {
         diceResourceNodes.clear();
+        tradeAttempted = false;
+        tradeRefused = false;
         phase = turnPhase("READY");
         turnMessage = playerLabel(currentPlayerTurnIndex + 1) + " is ready to roll.";
     }
@@ -461,6 +564,9 @@ public class GameService {
     }
 
     private void resetBoard() {
+        adviceService.deleteAll();
+        synergyPairService.deleteAll();
+
         for (Node node : nodeService.getAll()) {
             node.setSettlement(null);
             node.setOwner(null);
@@ -480,6 +586,8 @@ public class GameService {
         lastDiceSum = 0;
         diceRolls.clear();
         turnMessage = "";
+        tradeAttempted = false;
+        tradeRefused = false;
         scoringService.reset();
     }
 
@@ -492,6 +600,11 @@ public class GameService {
     }
 
     private BoardStateDto buildState() {
+        List<AdviceDto> advices = List.of();
+        if (currentPlayerId != null && isUserControlledCurrentPlayer()) {
+            advices = placementAdviceService.openingAdvice(currentPlayerId);
+        }
+
         List<NodeDto> nodeDtos = new ArrayList<>();
         for (Node node : nodeService.getAll()) {
             NodeDto dto = new NodeDto(node);
@@ -539,17 +652,258 @@ public class GameService {
                     resources));
         }
 
-        List<AdviceDto> advices = List.of();
-        if (step < STEPS.length && playerIds.size() == 3
-                && playerIds.get(2).equals(currentPlayerId)) {
-            advices = placementAdviceService.openingAdvice(playerIds.get(2));
-        }
+        List<GoalAdviceDto> goalAdvices = goalAdvices(players, scoreByPlayer);
 
         BuildOptions buildOptions = buildOptions(players);
         return new BoardStateDto(nodeDtos, edgeDtos, playerDtos, currentPlayerId, phase,
-                lastDiceSum, new ArrayList<>(diceRolls), advices,
+                lastDiceSum, new ArrayList<>(diceRolls), advices, goalAdvices,
                 buildOptions.actions(), buildOptions.roadEdgeIds(),
                 buildOptions.villageNodeIds(), buildOptions.townNodeIds(), turnMessage);
+    }
+
+    private List<GoalAdviceDto> goalAdvices(List<Player> players, Map<Integer, PlayerScoreFact> scoreByPlayer) {
+        if (!isMainTurn() || !isUserControlledCurrentPlayer() || currentPlayerId == null) {
+            return List.of();
+        }
+        Player player = players.stream()
+                .filter(candidate -> candidate.getId() == currentPlayerId)
+                .findFirst()
+                .orElse(null);
+        PlayerScoreFact score = scoreByPlayer.get(currentPlayerId);
+        if (player == null || score == null) {
+            return List.of();
+        }
+        List<GoalAdviceDto> advice = new ArrayList<>(goalPlanningService.advice(player, score, tradeAttempted, tradeRefused).stream()
+                .map(goalAdvice -> new GoalAdviceDto(goalAdvice, tradeProposal(goalAdvice.getTitle(), player, players)))
+                .toList());
+        addConcreteTradeSuggestions(advice, player, players);
+        return advice.stream()
+                .limit(10)
+                .toList();
+    }
+
+    private void addConcreteTradeSuggestions(List<GoalAdviceDto> advice, Player player, List<Player> players) {
+        BuildActionFact build = buildActionService.evaluate(player);
+        if (build.isHasVillageToUpgrade() && !build.isCanBuildTown()) {
+            addMissingResourceTrades(advice, player, players, "town",
+                    Map.of(Resource.ORE, 3, Resource.GRAIN, 2));
+        }
+        if (build.isHasLegalVillageNode() && !build.isCanBuildVillage()) {
+            addMissingResourceTrades(advice, player, players, "village",
+                    Map.of(Resource.WOOD, 1, Resource.BRICK, 1, Resource.GRAIN, 1, Resource.WOOL, 1));
+        }
+        if (build.isHasOpenRoadEdge() && !build.isCanBuildRoad()) {
+            addMissingResourceTrades(advice, player, players, "road",
+                    Map.of(Resource.WOOD, 1, Resource.BRICK, 1));
+        }
+    }
+
+    private void addMissingResourceTrades(List<GoalAdviceDto> advice, Player player, List<Player> players,
+                                          String object, Map<Resource, Integer> target) {
+        for (Map.Entry<Resource, Integer> entry : target.entrySet()) {
+            Resource wanted = entry.getKey();
+            if (resourceCount(player, wanted) >= entry.getValue()
+                    || hasConcreteTradeFor(advice, wanted)) {
+                continue;
+            }
+            String title = "Trade for " + object + " " + wanted.getDisplayName().toLowerCase();
+            TradeProposalDto proposal = tradeProposal(title, player, players);
+            if (proposal == null) {
+                continue;
+            }
+            advice.add(new GoalAdviceDto(new GoalAdvice(3, title,
+                    "You are collecting for a " + object
+                            + " and can make this concrete trade now."), proposal));
+        }
+    }
+
+    private boolean hasConcreteTradeFor(List<GoalAdviceDto> advice, Resource wanted) {
+        return advice.stream()
+                .map(GoalAdviceDto::getTradeProposal)
+                .anyMatch(proposal -> proposal != null
+                        && wanted.getDisplayName().equals(proposal.getWantedResource()));
+    }
+
+    private TradeProposalDto tradeProposal(String title, Player player, List<Player> players) {
+        String normalizedTitle = title == null ? "" : title.toLowerCase();
+        Map<Resource, Integer> target = targetCost(title, player);
+        Resource wanted = resourceMentionedInTitle(normalizedTitle);
+        if (wanted == null) {
+            wanted = firstMissingResource(player, target);
+        }
+        if (wanted == null && normalizedTitle.contains("bank")) {
+            wanted = firstUsefulBankWantedResource(player);
+        }
+        if (wanted == null) {
+            return null;
+        }
+
+        if (normalizedTitle.contains("bank")) {
+            Resource offered = resourceWithAtLeast(player, 4, wanted);
+            if (offered == null) {
+                return null;
+            }
+            return new TradeProposalDto(true, null, "bank", wanted.getDisplayName(),
+                    offered.getDisplayName(), 4,
+                    "Concrete trade: give 4 " + offered.getDisplayName()
+                            + " to the bank for 1 " + wanted.getDisplayName() + ".");
+        }
+
+        Player opponent = opponentWithResource(players, player.getId(), wanted);
+        int offeredAmount = normalizedTitle.contains("refusal") ? 2 : 1;
+        Resource offered = offeredResource(player, wanted, target, offeredAmount);
+        if (offered == null) {
+            return null;
+        }
+        if (opponent == null) {
+            return bankTradeProposal(player, wanted);
+        }
+
+        int opponentNumber = playerNumber(opponent.getId());
+        return new TradeProposalDto(false, opponent.getId(), playerLabel(opponentNumber),
+                wanted.getDisplayName(), offered.getDisplayName(), offeredAmount,
+                "Concrete trade: you are missing 1 " + wanted.getDisplayName()
+                        + "; trade " + amountLabel(offeredAmount, offered) + " with "
+                        + playerLabel(opponentNumber) + ", who has " + wanted.getDisplayName()
+                        + ". Acceptance chance: " + (offeredAmount >= 2 ? "85" : "65") + "%.");
+    }
+
+    private TradeProposalDto bankTradeProposal(Player player, Resource wanted) {
+        Resource offered = resourceWithAtLeast(player, 4, wanted);
+        if (offered == null) {
+            return null;
+        }
+        return new TradeProposalDto(true, null, "bank", wanted.getDisplayName(),
+                offered.getDisplayName(), 4,
+                "Concrete trade: give 4 " + offered.getDisplayName()
+                        + " to the bank for 1 " + wanted.getDisplayName() + ".");
+    }
+
+    private Resource resourceMentionedInTitle(String normalizedTitle) {
+        if (normalizedTitle.contains("wood")) {
+            return Resource.WOOD;
+        }
+        if (normalizedTitle.contains("brick")) {
+            return Resource.BRICK;
+        }
+        if (normalizedTitle.contains("grain")) {
+            return Resource.GRAIN;
+        }
+        if (normalizedTitle.contains("wool") || normalizedTitle.contains("sheep")) {
+            return Resource.WOOL;
+        }
+        if (normalizedTitle.contains("ore")) {
+            return Resource.ORE;
+        }
+        return null;
+    }
+
+    private Map<Resource, Integer> targetCost(String title, Player player) {
+        Map<Resource, Integer> cost = new LinkedHashMap<>();
+        if (title == null) {
+            return cost;
+        }
+        if (title.contains("refusal") || title.contains("Refusal")) {
+            BuildActionFact build = buildActionService.evaluate(player);
+            if (build.isHasLegalVillageNode() && !build.isCanBuildVillage()) {
+                cost.put(Resource.WOOD, 1);
+                cost.put(Resource.BRICK, 1);
+                cost.put(Resource.GRAIN, 1);
+                cost.put(Resource.WOOL, 1);
+            } else if (build.isHasVillageToUpgrade() && !build.isCanBuildTown()) {
+                cost.put(Resource.ORE, 3);
+                cost.put(Resource.GRAIN, 2);
+            } else {
+                cost.put(Resource.WOOD, 1);
+                cost.put(Resource.BRICK, 1);
+            }
+            return cost;
+        }
+        if (title.contains("road") || title.contains("Road")) {
+            cost.put(Resource.WOOD, 1);
+            cost.put(Resource.BRICK, 1);
+            return cost;
+        }
+        if (title.contains("village") || title.contains("Village")) {
+            cost.put(Resource.WOOD, 1);
+            cost.put(Resource.BRICK, 1);
+            cost.put(Resource.GRAIN, 1);
+            cost.put(Resource.WOOL, 1);
+            return cost;
+        }
+        if (title.contains("town") || title.contains("Town") || title.contains("bank")) {
+            cost.put(Resource.ORE, 3);
+            cost.put(Resource.GRAIN, 2);
+            return cost;
+        }
+
+        if (buildActionService.evaluate(player).isCanBuildVillage()) {
+            cost.put(Resource.ORE, 3);
+            cost.put(Resource.GRAIN, 2);
+        } else {
+            cost.put(Resource.WOOD, 1);
+            cost.put(Resource.BRICK, 1);
+        }
+        return cost;
+    }
+
+    private Resource firstMissingResource(Player player, Map<Resource, Integer> target) {
+        for (Map.Entry<Resource, Integer> entry : target.entrySet()) {
+            if (resourceCount(player, entry.getKey()) < entry.getValue()) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    private Resource firstUsefulBankWantedResource(Player player) {
+        Map<Resource, Integer> town = new LinkedHashMap<>();
+        town.put(Resource.ORE, 3);
+        town.put(Resource.GRAIN, 2);
+        Resource missingTown = firstMissingResource(player, town);
+        if (missingTown != null) {
+            return missingTown;
+        }
+
+        Map<Resource, Integer> road = new LinkedHashMap<>();
+        road.put(Resource.WOOD, 1);
+        road.put(Resource.BRICK, 1);
+        return firstMissingResource(player, road);
+    }
+
+    private Player opponentWithResource(List<Player> players, int playerId, Resource resource) {
+        return players.stream()
+                .filter(player -> player.getId() != playerId)
+                .filter(player -> resourceCount(player, resource) > 0)
+                .max(Comparator.comparingInt(player -> resourceCount(player, resource)))
+                .orElse(null);
+    }
+
+    private Resource offeredResource(Player player, Resource wanted, Map<Resource, Integer> target, int amount) {
+        Resource best = null;
+        int bestSurplus = Integer.MIN_VALUE;
+        List<Resource> preference = wanted == Resource.BRICK
+                ? List.of(Resource.WOOD, Resource.WOOL, Resource.GRAIN, Resource.ORE)
+                : List.of(Resource.WOOL, Resource.WOOD, Resource.BRICK, Resource.GRAIN, Resource.ORE);
+        for (Resource resource : preference) {
+            if (resource == wanted || resourceCount(player, resource) < amount) {
+                continue;
+            }
+            int surplus = resourceCount(player, resource) - target.getOrDefault(resource, 0);
+            if (surplus > bestSurplus) {
+                best = resource;
+                bestSurplus = surplus;
+            }
+        }
+        return best;
+    }
+
+    private Resource resourceWithAtLeast(Player player, int amount, Resource except) {
+        return List.of(Resource.WOOL, Resource.WOOD, Resource.BRICK, Resource.GRAIN, Resource.ORE).stream()
+                .filter(resource -> resource != except)
+                .filter(resource -> resourceCount(player, resource) >= amount)
+                .findFirst()
+                .orElse(null);
     }
 
     private Map<String, Integer> playerResources(List<Player> players, int playerId) {
@@ -585,5 +939,30 @@ public class GameService {
         private static BuildOptions empty() {
             return new BuildOptions(List.of(), List.of(), List.of(), List.of());
         }
+    }
+
+    private int resourceCount(Player player, Resource resource) {
+        if (player == null || player.getResources() == null) {
+            return 0;
+        }
+        return player.getResources().getOrDefault(resource, 0);
+    }
+
+    private Resource parseResource(String label) {
+        for (Resource resource : Resource.values()) {
+            if (resource.getDisplayName().equalsIgnoreCase(label) || resource.name().equalsIgnoreCase(label)) {
+                return resource;
+            }
+        }
+        throw new GameActionException(HttpStatus.BAD_REQUEST, "Unknown resource: " + label + ".");
+    }
+
+    private int playerNumber(int playerId) {
+        int index = playerIds.indexOf(playerId);
+        return index < 0 ? playerId : index + 1;
+    }
+
+    private String amountLabel(int amount, Resource resource) {
+        return amount + " " + resource.getDisplayName();
     }
 }

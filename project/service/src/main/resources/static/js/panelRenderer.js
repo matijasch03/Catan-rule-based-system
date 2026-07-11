@@ -7,6 +7,9 @@ import {
   dicePanelEl,
   diceRollsEl,
   endTurnBtn,
+  adviceColumnEl,
+  goalListEl,
+  goalPanelEl,
   handCardsEl,
   playersEl,
 } from "./dom.js";
@@ -16,10 +19,12 @@ import { state } from "./state.js";
 let lastHandSignature = "";
 let shuffledHandCards = [];
 
-export function renderPanel(selectNode, buildAction) {
+export function renderPanel(selectNode, buildAction, tradeAction) {
   renderPlayers();
   renderDiceRolls();
   renderAdvice(selectNode);
+  renderGoalAdvice(tradeAction);
+  adviceColumnEl.hidden = advicePanelEl.hidden && goalPanelEl.hidden;
   renderBuildActions(buildAction);
   endTurnBtn.hidden = !canAdvanceTurn();
   endTurnBtn.textContent = turnButtonLabel();
@@ -127,10 +132,13 @@ function renderAdvice(selectNode) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `advice advice-${advice.rank}`;
-    const route = advice.routeNodeIds || [advice.nodeId];
+    const route = adviceRoute(advice);
     const first = route[0] || advice.nodeId;
     const last = route[route.length - 1] || advice.nodeId;
-    button.innerHTML = `<strong>Nodes ${first}-${last}</strong><span>Score ${advice.score}</span>`;
+    const openingPair = (advice.tags || []).includes("OpeningPair");
+    button.innerHTML = openingPair
+      ? `<strong>Start ${first} + ${last}</strong><span>Score ${advice.score}</span>`
+      : `<strong>Nodes ${first}-${last}</strong><span>Score ${advice.score}</span>`;
     button.title = advice.description;
     button.addEventListener("click", () => selectNode(advice.nodeId));
     item.appendChild(button);
@@ -139,7 +147,9 @@ function renderAdvice(selectNode) {
     details.className = "advice-details";
 
     const nodes = document.createElement("p");
-    nodes.textContent = `Recommended settlements: node ${first} and node ${last}.`;
+    nodes.textContent = openingPair
+      ? `Opening settlements: red node ${first} first, blue node ${last} second.`
+      : `Recommended settlements: node ${first} and node ${last}.`;
     details.appendChild(nodes);
 
     const path = document.createElement("p");
@@ -159,6 +169,50 @@ function renderAdvice(selectNode) {
 
     item.appendChild(details);
     adviceListEl.appendChild(item);
+  }
+}
+
+function adviceRoute(advice) {
+  const route = Array.isArray(advice.routeNodeIds)
+    ? advice.routeNodeIds.filter(Boolean)
+    : [];
+  if (!route.length && advice.nodeId) {
+    return [advice.nodeId];
+  }
+  if (advice.nodeId && !route.includes(advice.nodeId)) {
+    return [advice.nodeId, ...route];
+  }
+  return route;
+}
+
+function renderGoalAdvice(tradeAction) {
+  const advices = (state.game && state.game.goalAdvices) || [];
+  goalPanelEl.hidden = advices.length === 0;
+  goalListEl.innerHTML = "";
+
+  for (const advice of advices) {
+    const item = document.createElement("li");
+    const title = document.createElement("strong");
+    title.textContent = advice.title;
+    item.appendChild(title);
+
+    const description = document.createElement("p");
+    description.textContent = advice.description;
+    item.appendChild(description);
+
+    if (advice.tradeAction) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "trade-advice-btn";
+      const proposal = advice.tradeProposal;
+      button.textContent = proposal
+        ? `Trade ${proposal.offeredAmount || 1} ${proposal.offeredResource} for ${proposal.wantedResource}`
+        : "Offer trade";
+      button.disabled = !proposal;
+      button.addEventListener("click", () => tradeAction({ title: advice.title, ...proposal }));
+      item.appendChild(button);
+    }
+    goalListEl.appendChild(item);
   }
 }
 
