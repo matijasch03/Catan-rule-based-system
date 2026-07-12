@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.ftn.sbnz.kjar.NodeDistance;
 import com.ftn.sbnz.kjar.RankingRequest;
+import com.ftn.sbnz.kjar.RoadLink;
 import com.ftn.sbnz.kjar.SettlementBuilding;
 import com.ftn.sbnz.model.Advice;
 import com.ftn.sbnz.model.Edge;
@@ -663,6 +664,10 @@ public class PlacementAdviceService {
 
     private List<Node> shortestPath(Node start, Node target, Map<Integer, List<Edge>> edgesByNode,
                                     boolean requireFreeEdges, int mePlayerId) {
+        if (!canConnectBackward(start, target, edgesByNode, requireFreeEdges, mePlayerId)) {
+            return List.of();
+        }
+
         Map<Integer, Node> previous = new LinkedHashMap<>();
         Set<Integer> visited = new HashSet<>();
         ArrayDeque<Node> frontier = new ArrayDeque<>();
@@ -675,10 +680,13 @@ public class PlacementAdviceService {
                 return reconstructPath(start, target, previous);
             }
             for (Edge edge : edgesByNode.getOrDefault(current.getId(), List.of())) {
-                if (requireFreeEdges && edge.getOwner() != null && edge.getOwner().getId() != mePlayerId) {
+                if (edge.getOwner() != null && edge.getOwner().getId() != mePlayerId) {
                     continue;
                 }
                 Node next = otherNode(edge, current);
+                if (blocksRoute(next, target, mePlayerId)) {
+                    continue;
+                }
                 if (visited.add(next.getId())) {
                     previous.put(next.getId(), current);
                     frontier.add(next);
@@ -686,6 +694,82 @@ public class PlacementAdviceService {
             }
         }
         return List.of();
+    }
+
+    private boolean canConnectBackward(Node start, Node target, Map<Integer, List<Edge>> edgesByNode,
+                                       boolean requireFreeEdges, int mePlayerId) {
+        if (start.getId() == target.getId()) {
+            return true;
+        }
+        Map<Integer, Integer> distanceToTarget = roadDistancesToTarget(target, edgesByNode,
+                requireFreeEdges, mePlayerId);
+        if (!distanceToTarget.containsKey(start.getId())) {
+            return false;
+        }
+
+        KieSession session = kieContainer.newKieSession("boardScoreSession");
+        try {
+            for (Map.Entry<Integer, Integer> entry : distanceToTarget.entrySet()) {
+                int fromNodeId = entry.getKey();
+                int fromDistance = entry.getValue();
+                for (Edge edge : edgesByNode.getOrDefault(fromNodeId, List.of())) {
+                    if (!roadEdgeAllowed(edge, requireFreeEdges, mePlayerId)) {
+                        continue;
+                    }
+                    Node next = otherNode(edge, fromNodeId);
+                    if (blocksRoute(next, target, mePlayerId)) {
+                        continue;
+                    }
+                    Integer nextDistance = distanceToTarget.get(next.getId());
+                    if (nextDistance != null && nextDistance < fromDistance) {
+                        session.insert(new RoadLink(fromNodeId, next.getId(), target.getId()));
+                    }
+                }
+            }
+            return session.getQueryResults("canConnect", start.getId(), target.getId()).size() > 0;
+        } finally {
+            session.dispose();
+        }
+    }
+
+    private Map<Integer, Integer> roadDistancesToTarget(Node target, Map<Integer, List<Edge>> edgesByNode,
+                                                        boolean requireFreeEdges, int mePlayerId) {
+        Map<Integer, Integer> distance = new HashMap<>();
+        ArrayDeque<Node> frontier = new ArrayDeque<>();
+        distance.put(target.getId(), 0);
+        frontier.add(target);
+
+        while (!frontier.isEmpty()) {
+            Node current = frontier.remove();
+            int nextDistance = distance.get(current.getId()) + 1;
+            for (Edge edge : edgesByNode.getOrDefault(current.getId(), List.of())) {
+                if (!roadEdgeAllowed(edge, requireFreeEdges, mePlayerId)) {
+                    continue;
+                }
+                Node next = otherNode(edge, current);
+                if (blocksRoute(next, target, mePlayerId) || distance.containsKey(next.getId())) {
+                    continue;
+                }
+                distance.put(next.getId(), nextDistance);
+                frontier.add(next);
+            }
+        }
+        return distance;
+    }
+
+    private boolean roadEdgeAllowed(Edge edge, boolean requireFreeEdges, int mePlayerId) {
+        if (edge.getOwner() == null) {
+            return true;
+        }
+        return edge.getOwner().getId() == mePlayerId;
+    }
+
+    private boolean blocksRoute(Node node, Node target, int mePlayerId) {
+        if (node == null || node.getId() == target.getId()
+                || node.getOwner() == null || node.getSettlement() == null) {
+            return false;
+        }
+        return node.getOwner().getId() != mePlayerId;
     }
 
     private List<Node> reconstructPath(Node start, Node target, Map<Integer, Node> previous) {
@@ -704,6 +788,10 @@ public class PlacementAdviceService {
 
     private Node otherNode(Edge edge, Node node) {
         return edge.getNode1().getId() == node.getId() ? edge.getNode2() : edge.getNode1();
+    }
+
+    private Node otherNode(Edge edge, int nodeId) {
+        return edge.getNode1().getId() == nodeId ? edge.getNode2() : edge.getNode1();
     }
 
     private List<Node> legalCheckpoints(List<Node> path, Set<Integer> unavailableForSettlement,

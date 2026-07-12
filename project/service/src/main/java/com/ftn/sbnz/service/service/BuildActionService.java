@@ -170,10 +170,16 @@ public class BuildActionService {
     }
 
     private boolean touchesPlayerNetwork(Edge edge, int playerId) {
-        return isOwnedNode(edge.getNode1(), playerId)
-                || isOwnedNode(edge.getNode2(), playerId)
-                || hasOwnedIncidentRoad(edge.getNode1().getId(), playerId)
-                || hasOwnedIncidentRoad(edge.getNode2().getId(), playerId);
+        return connectsThroughNode(edge.getNode1(), playerId)
+                || connectsThroughNode(edge.getNode2(), playerId);
+    }
+
+    private boolean connectsThroughNode(Node node, int playerId) {
+        if (isOpponentSettlement(node, playerId)) {
+            return false;
+        }
+        return isOwnedNode(node, playerId)
+                || hasOwnedIncidentRoad(node.getId(), playerId);
     }
 
     private boolean hasOwnedIncidentRoad(int nodeId, int playerId) {
@@ -242,6 +248,10 @@ public class BuildActionService {
         for (Edge edge : ownedAdjacentEdges(nodeId, playerId)) {
             if (!usedEdges.add(edge.getId())) continue;
             int nextNodeId = otherNode(edge, nodeId);
+            if (nextNodeId != targetNodeId && isOpponentSettlement(nextNodeId, playerId)) {
+                usedEdges.remove(edge.getId());
+                continue;
+            }
             int distance = distanceToTarget(nextNodeId, targetNodeId, playerId, usedEdges);
             if (distance >= 0) {
                 best = Math.max(best, 1 + distance);
@@ -255,7 +265,12 @@ public class BuildActionService {
         int longest = 0;
         for (Edge edge : ownedAdjacentEdges(nodeId, playerId)) {
             if (!usedEdges.add(edge.getId())) continue;
-            longest = Math.max(longest, 1 + longestOwnedRoadFrom(otherNode(edge, nodeId), playerId, usedEdges));
+            int nextNodeId = otherNode(edge, nodeId);
+            if (isOpponentSettlement(nextNodeId, playerId)) {
+                longest = Math.max(longest, 1);
+            } else {
+                longest = Math.max(longest, 1 + longestOwnedRoadFrom(nextNodeId, playerId, usedEdges));
+            }
             usedEdges.remove(edge.getId());
         }
         return longest;
@@ -281,6 +296,17 @@ public class BuildActionService {
 
     private boolean isOwnedNode(Node node, int playerId) {
         return node.getOwner() != null && node.getOwner().getId() == playerId && node.getSettlement() != null;
+    }
+
+    private boolean isOpponentSettlement(int nodeId, int playerId) {
+        return nodeService.getAll().stream()
+                .anyMatch(node -> node.getId() == nodeId && isOpponentSettlement(node, playerId));
+    }
+
+    private boolean isOpponentSettlement(Node node, int playerId) {
+        return node.getOwner() != null
+                && node.getOwner().getId() != playerId
+                && node.getSettlement() != null;
     }
 
     private void spend(Player player, Map<Resource, Integer> cost) {

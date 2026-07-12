@@ -54,6 +54,9 @@ public class ServiceApplication {
 		fileSystem.write("src/main/resources/rules/board/build-actions.drl",
 				services.getResources().newClassPathResource(
 						"rules/board/build-actions.drl", ResourcePriorityTemplateCompiler.class));
+		fileSystem.write("src/main/resources/rules/board/road-connectivity.drl",
+				services.getResources().newClassPathResource(
+						"rules/board/road-connectivity.drl", ResourcePriorityTemplateCompiler.class));
 
 		String priorityRules;
 		try (InputStream template = ResourcePriorityTemplateCompiler.class.getClassLoader()
