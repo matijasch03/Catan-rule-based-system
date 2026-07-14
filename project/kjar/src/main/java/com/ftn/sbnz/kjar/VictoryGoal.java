@@ -23,6 +23,9 @@ public class VictoryGoal {
     private int brick;
     private int ore;
     private int totalResources;
+    private int roadsMissingForPlannedRoute;
+    private int myRoadCards;
+    private int opponentRoadCards;
     private Integer bestOreNodeId;
     private int bestOreNodeScore;
     private Integer bestGrainNodeId;
@@ -59,6 +62,9 @@ public class VictoryGoal {
     public int getBrick() { return brick; }
     public int getOre() { return ore; }
     public int getTotalResources() { return totalResources; }
+    public int getRoadsMissingForPlannedRoute() { return roadsMissingForPlannedRoute; }
+    public int getMyRoadCards() { return myRoadCards; }
+    public int getOpponentRoadCards() { return opponentRoadCards; }
     public Integer getBestOreNodeId() { return bestOreNodeId; }
     public int getBestOreNodeScore() { return bestOreNodeScore; }
     public Integer getBestGrainNodeId() { return bestGrainNodeId; }
@@ -87,6 +93,9 @@ public class VictoryGoal {
     public void setBrick(int brick) { this.brick = brick; }
     public void setOre(int ore) { this.ore = ore; }
     public void setTotalResources(int totalResources) { this.totalResources = totalResources; }
+    public void setRoadsMissingForPlannedRoute(int roadsMissingForPlannedRoute) { this.roadsMissingForPlannedRoute = roadsMissingForPlannedRoute; }
+    public void setMyRoadCards(int myRoadCards) { this.myRoadCards = myRoadCards; }
+    public void setOpponentRoadCards(int opponentRoadCards) { this.opponentRoadCards = opponentRoadCards; }
     public void setBestOreNodeId(Integer bestOreNodeId) { this.bestOreNodeId = bestOreNodeId; }
     public void setBestOreNodeScore(int bestOreNodeScore) { this.bestOreNodeScore = bestOreNodeScore; }
     public void setBestGrainNodeId(Integer bestGrainNodeId) { this.bestGrainNodeId = bestGrainNodeId; }

@@ -33,6 +33,13 @@ public class GoalPlanningService {
 
     public List<GoalAdvice> advice(Player player, PlayerScoreFact scoreFact,
                                    boolean tradeAttempted, boolean tradeRefused) {
+        return advice(player, scoreFact, tradeAttempted, tradeRefused, List.of(), 0, 0);
+    }
+
+    public List<GoalAdvice> advice(Player player, PlayerScoreFact scoreFact,
+                                   boolean tradeAttempted, boolean tradeRefused,
+                                   List<Object> cepFacts, int roadsMissingForPlannedRoute,
+                                   int opponentRoadCards) {
         if (player == null || scoreFact == null || scoreFact.isWinner()) {
             return List.of();
         }
@@ -41,11 +48,16 @@ public class GoalPlanningService {
         VictoryGoal goal = goal(player, scoreFact, build);
         goal.setTradeAttempted(tradeAttempted);
         goal.setTradeRefused(tradeRefused);
+        goal.setRoadsMissingForPlannedRoute(roadsMissingForPlannedRoute);
+        goal.setOpponentRoadCards(opponentRoadCards);
 
         KieSession session = kieContainer.newKieSession();
         try {
             session.insert(build);
             session.insert(goal);
+            for (Object fact : cepFacts) {
+                session.insert(fact);
+            }
             session.fireAllRules();
             return session.getObjects(object -> object instanceof GoalAdvice).stream()
                     .map(GoalAdvice.class::cast)
@@ -75,6 +87,7 @@ public class GoalPlanningService {
         goal.setOre(build.getOre());
         goal.setTotalResources(build.getWood() + build.getWool() + build.getGrain()
                 + build.getBrick() + build.getOre());
+        goal.setMyRoadCards(Math.min(build.getWood(), build.getBrick()));
         goal.setHasOreProducer(hasProducer(player.getId(), Resource.ORE));
         goal.setHasGrainProducer(hasProducer(player.getId(), Resource.GRAIN));
         setBestResourceTargets(goal, player, Resource.ORE);

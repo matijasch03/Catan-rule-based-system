@@ -1,6 +1,7 @@
 package com.ftn.sbnz.service.service;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -15,6 +16,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import com.ftn.sbnz.model.BuildActionFact;
+import com.ftn.sbnz.kjar.ResourceProductionSignal;
+import com.ftn.sbnz.kjar.RoadBuildEvent;
+import com.ftn.sbnz.kjar.TradeSignal;
 import com.ftn.sbnz.kjar.GoalAdvice;
 import com.ftn.sbnz.model.Edge;
 import com.ftn.sbnz.model.Hexagon;
@@ -23,6 +27,7 @@ import com.ftn.sbnz.model.Player;
 import com.ftn.sbnz.model.PlayerScoreFact;
 import com.ftn.sbnz.model.Resource;
 import com.ftn.sbnz.model.Settlement;
+import com.ftn.sbnz.model.SynergyPair;
 import com.ftn.sbnz.service.controller.GameController.TradeRequest;
 import com.ftn.sbnz.service.dto.AdviceDto;
 import com.ftn.sbnz.service.dto.BoardStateDto;
@@ -42,6 +47,8 @@ public class GameService {
         {1, 0}, {1, 1}, {1, 2},
         {2, 2}, {2, 1}, {2, 0},
     };
+    private static final int CEP_WINDOW_TURNS = 3;
+    private static final int UNREACHABLE_ROUTE_DISTANCE = 99;
 
     private final NodeService nodeService;
     private final EdgeService edgeService;
@@ -67,6 +74,9 @@ public class GameService {
     private String turnMessage = "";
     private boolean tradeAttempted = false;
     private boolean tradeRefused = false;
+    private int turnSequence = 0;
+    private final List<RoadBuildEvent> roadBuildEvents = new ArrayList<>();
+    private final List<TradeSignal> tradeSignals = new ArrayList<>();
 
     public GameService(NodeService nodeService, EdgeService edgeService, PlayerService playerService,
                        PlacementAdviceService placementAdviceService, ScoringService scoringService,
@@ -183,9 +193,11 @@ public class GameService {
             throw new GameActionException(HttpStatus.CONFLICT, "You can build only after dice are rolled.");
         }
         Player player = playerService.getById(currentPlayerId).orElseThrow();
+        int beforeDistance = routeDistanceFor(player.getId());
         buildActionService.build(player, action, nodeId, edgeId);
         if (BuildActionService.ROAD.equalsIgnoreCase(action)) {
             placementAdviceService.updatePersistedRoutes(player.getId());
+            recordRoadBuild(player.getId(), edgeId, beforeDistance);
         }
         turnMessage = playerLabel(currentPlayerTurnIndex + 1) + " built " + action.toLowerCase() + ".";
         return buildState();
@@ -233,6 +245,7 @@ public class GameService {
         int acceptanceChance = offeredAmount >= 2 ? 85 : 65;
         if (random.nextInt(100) >= acceptanceChance) {
             tradeRefused = true;
+            recordTradeSignal(opponent.getId(), wanted, false);
             turnMessage = playerLabel(playerNumber(opponent.getId()))
                     + " refused your offer: " + amountLabel(offeredAmount, offered)
                     + " for 1 " + wanted.getDisplayName() + ".";
@@ -245,6 +258,7 @@ public class GameService {
         opponent.addResource(offered, offeredAmount);
         playerService.create(player);
         playerService.create(opponent);
+        recordTradeSignal(opponent.getId(), offered, true);
         tradeRefused = false;
         turnMessage = playerLabel(playerNumber(opponent.getId()))
                 + " accepted your offer. Trade completed: you gave " + amountLabel(offeredAmount, offered)
@@ -335,6 +349,8 @@ public class GameService {
     }
 
     private void startCurrentTurn() {
+        turnSequence++;
+        pruneCepWindow();
         diceResourceNodes.clear();
         tradeAttempted = false;
         tradeRefused = false;
@@ -470,7 +486,9 @@ public class GameService {
             List<Integer> edges = buildActionService.legalRoadEdgeIds(player);
             if (!edges.isEmpty()) {
                 int edgeId = randomChoice(edges);
+                int beforeDistance = routeDistanceFor(player.getId());
                 buildActionService.build(player, BuildActionService.ROAD, null, edgeId);
+                recordRoadBuild(player.getId(), edgeId, beforeDistance);
                 return playerLabel(playerNumber) + " built a road on edge " + edgeId + ".";
             }
         }
@@ -588,6 +606,9 @@ public class GameService {
         turnMessage = "";
         tradeAttempted = false;
         tradeRefused = false;
+        turnSequence = 0;
+        roadBuildEvents.clear();
+        tradeSignals.clear();
         scoringService.reset();
     }
 
@@ -673,7 +694,10 @@ public class GameService {
         if (player == null || score == null) {
             return List.of();
         }
-        List<GoalAdviceDto> advice = new ArrayList<>(goalPlanningService.advice(player, score, tradeAttempted, tradeRefused).stream()
+        List<Object> cepFacts = cepFacts(player, players);
+        List<GoalAdviceDto> advice = new ArrayList<>(goalPlanningService.advice(player, score, tradeAttempted, tradeRefused,
+                        cepFacts, roadsMissingForPlannedRoute(player.getId()),
+                        maxOpponentRoadCards(player.getId(), players)).stream()
                 .map(goalAdvice -> new GoalAdviceDto(goalAdvice, tradeProposal(goalAdvice.getTitle(), player, players)))
                 .toList());
         addConcreteTradeSuggestions(advice, player, players);
@@ -696,6 +720,308 @@ public class GameService {
             addMissingResourceTrades(advice, player, players, "road",
                     Map.of(Resource.WOOD, 1, Resource.BRICK, 1));
         }
+    }
+
+    private List<Object> cepFacts(Player me, List<Player> players) {
+        pruneCepWindow();
+        List<Object> facts = new ArrayList<>();
+        for (RoadBuildEvent event : roadBuildEvents) {
+            if (event.getPlayerId() == me.getId() || event.getDistanceToRoute() >= UNREACHABLE_ROUTE_DISTANCE) {
+                continue;
+            }
+            facts.add(new RoadBuildEvent(event.getPlayerId(), me.getId(), event.getEdgeId(),
+                    event.getTurn(), event.getDistanceToRoute(),
+                    event.getPreviousDistanceToRoute(), event.getDirection()));
+        }
+        for (Player player : players) {
+            if (player.getId() == me.getId()) {
+                continue;
+            }
+            for (Resource resource : List.of(Resource.WOOD, Resource.BRICK, Resource.ORE, Resource.GRAIN, Resource.WOOL)) {
+                double score = productionScore(player.getId(), resource);
+                if (score > 0.0) {
+                    facts.add(new ResourceProductionSignal(player.getId(), resource, score));
+                }
+            }
+        }
+        facts.addAll(tradeSignals);
+        return facts;
+    }
+
+    private void recordRoadBuild(int playerId, Integer edgeId, int previousDistance) {
+        if (edgeId == null) {
+            return;
+        }
+        int mePlayerId = controlledPlayerId();
+        if (mePlayerId == 0 || playerId == mePlayerId) {
+            return;
+        }
+        int currentDistance = routeDistanceFor(playerId);
+        if (currentDistance >= UNREACHABLE_ROUTE_DISTANCE && previousDistance >= UNREACHABLE_ROUTE_DISTANCE) {
+            return;
+        }
+        roadBuildEvents.add(new RoadBuildEvent(playerId, mePlayerId, edgeId, turnSequence,
+                currentDistance, previousDistance, routeDirectionFor(playerId)));
+        pruneCepWindow();
+    }
+
+    private void recordTradeSignal(int playerId, Resource resource, boolean successful) {
+        double weight = resourceWeight(resource);
+        if (weight <= 0.0) {
+            return;
+        }
+        double tradeSuccess = successful ? 1.0 : 0.4;
+        tradeSignals.add(new TradeSignal(playerId, resource, turnSequence, successful, weight * tradeSuccess));
+        pruneCepWindow();
+    }
+
+    private void pruneCepWindow() {
+        int oldestTurn = turnSequence - CEP_WINDOW_TURNS;
+        roadBuildEvents.removeIf(event -> event.getTurn() < oldestTurn);
+        tradeSignals.removeIf(event -> event.getTurn() < oldestTurn);
+    }
+
+    private int roadsMissingForPlannedRoute(int playerId) {
+        return plannedRouteNodes(playerId).stream()
+                .mapToInt(node -> hasOwnedIncidentRoad(node.getId(), playerId) ? 0 : 1)
+                .sum();
+    }
+
+    private int maxOpponentRoadCards(int mePlayerId, List<Player> players) {
+        return players.stream()
+                .filter(player -> player.getId() != mePlayerId)
+                .mapToInt(player -> Math.min(resourceCount(player, Resource.WOOD), resourceCount(player, Resource.BRICK)))
+                .max()
+                .orElse(0);
+    }
+
+    private int routeDistanceFor(int playerId) {
+        int mePlayerId = controlledPlayerId();
+        if (mePlayerId == 0) {
+            return UNREACHABLE_ROUTE_DISTANCE;
+        }
+        Set<Integer> targetRoute = plannedRouteNodeIds(mePlayerId);
+        if (targetRoute.isEmpty()) {
+            return UNREACHABLE_ROUTE_DISTANCE;
+        }
+
+        ArrayDeque<Integer> frontier = new ArrayDeque<>();
+        Map<Integer, Integer> distance = new HashMap<>();
+        for (Edge edge : edgeService.getAll()) {
+            if (edge.getOwner() == null || edge.getOwner().getId() != playerId) {
+                continue;
+            }
+            int first = edge.getNode1().getId();
+            int second = edge.getNode2().getId();
+            if (distance.putIfAbsent(first, 0) == null) {
+                frontier.add(first);
+            }
+            if (distance.putIfAbsent(second, 0) == null) {
+                frontier.add(second);
+            }
+        }
+        if (frontier.isEmpty()) {
+            for (Node node : nodeService.getAll()) {
+                if (node.getOwner() != null && node.getOwner().getId() == playerId && node.getSettlement() != null) {
+                    distance.put(node.getId(), 0);
+                    frontier.add(node.getId());
+                }
+            }
+        }
+
+        Map<Integer, List<Edge>> edgesByNode = edgesByNode();
+        while (!frontier.isEmpty()) {
+            int current = frontier.remove();
+            int currentDistance = distance.get(current);
+            if (targetRoute.contains(current)) {
+                return currentDistance;
+            }
+            if (currentDistance >= 6) {
+                continue;
+            }
+            for (Edge edge : edgesByNode.getOrDefault(current, List.of())) {
+                if (edge.getOwner() != null && edge.getOwner().getId() != playerId) {
+                    continue;
+                }
+                int next = otherNodeId(edge, current);
+                if (distance.containsKey(next)) {
+                    continue;
+                }
+                distance.put(next, currentDistance + 1);
+                frontier.add(next);
+            }
+        }
+        return UNREACHABLE_ROUTE_DISTANCE;
+    }
+
+    private String routeDirectionFor(int playerId) {
+        Node opponent = firstNetworkNode(playerId);
+        Node target = nearestPlannedRouteNode(playerId);
+        if (opponent == null || target == null
+                || opponent.getPossessiveHexagon() == null || target.getPossessiveHexagon() == null) {
+            return "unknown";
+        }
+        int dq = opponent.getPossessiveHexagon().getQ() - target.getPossessiveHexagon().getQ();
+        int dr = opponent.getPossessiveHexagon().getR() - target.getPossessiveHexagon().getR();
+        if (Math.abs(dq) >= Math.abs(dr)) {
+            return dq >= 0 ? "east" : "west";
+        }
+        return dr >= 0 ? "south" : "north";
+    }
+
+    private Node nearestPlannedRouteNode(int playerId) {
+        Set<Integer> routeIds = plannedRouteNodeIds(controlledPlayerId());
+        if (routeIds.isEmpty()) {
+            return null;
+        }
+        Set<Integer> network = networkNodeIds(playerId);
+        if (network.isEmpty()) {
+            return null;
+        }
+        Map<Integer, List<Edge>> edgesByNode = edgesByNode();
+        ArrayDeque<Integer> frontier = new ArrayDeque<>(network);
+        Map<Integer, Integer> distance = new HashMap<>();
+        for (int nodeId : network) {
+            distance.put(nodeId, 0);
+        }
+        Map<Integer, Node> nodes = nodesById();
+        while (!frontier.isEmpty()) {
+            int current = frontier.remove();
+            if (routeIds.contains(current)) {
+                return nodes.get(current);
+            }
+            for (Edge edge : edgesByNode.getOrDefault(current, List.of())) {
+                if (edge.getOwner() != null && edge.getOwner().getId() != playerId) {
+                    continue;
+                }
+                int next = otherNodeId(edge, current);
+                if (distance.putIfAbsent(next, distance.get(current) + 1) == null) {
+                    frontier.add(next);
+                }
+            }
+        }
+        return null;
+    }
+
+    private Node firstNetworkNode(int playerId) {
+        Set<Integer> network = networkNodeIds(playerId);
+        if (network.isEmpty()) {
+            return null;
+        }
+        Map<Integer, Node> nodes = nodesById();
+        return nodes.get(network.iterator().next());
+    }
+
+    private Set<Integer> networkNodeIds(int playerId) {
+        Set<Integer> ids = new HashSet<>();
+        for (Edge edge : edgeService.getAll()) {
+            if (edge.getOwner() != null && edge.getOwner().getId() == playerId) {
+                ids.add(edge.getNode1().getId());
+                ids.add(edge.getNode2().getId());
+            }
+        }
+        for (Node node : nodeService.getAll()) {
+            if (node.getOwner() != null && node.getOwner().getId() == playerId && node.getSettlement() != null) {
+                ids.add(node.getId());
+            }
+        }
+        return ids;
+    }
+
+    private double productionScore(int playerId, Resource resource) {
+        double weight = resourceWeight(resource);
+        if (weight <= 0.0) {
+            return 0.0;
+        }
+        double score = 0.0;
+        for (Node node : nodeService.getAll()) {
+            if (node.getOwner() == null || node.getOwner().getId() != playerId || node.getSettlement() == null) {
+                continue;
+            }
+            for (Hexagon hex : node.getAdjacentHexagons()) {
+                if (hex.getField() == resource) {
+                    score += weight * diceWeight(hex.getDots());
+                }
+            }
+        }
+        return score;
+    }
+
+    private double resourceWeight(Resource resource) {
+        return switch (resource) {
+            case WOOD, BRICK -> 3.0;
+            case ORE -> 0.5;
+            case GRAIN, WOOL -> 1.5;
+            default -> 0.0;
+        };
+    }
+
+    private int diceWeight(int dots) {
+        return switch (dots) {
+            case 2, 12 -> 1;
+            case 3, 11 -> 2;
+            case 4, 10 -> 3;
+            case 5, 9 -> 4;
+            case 6, 8 -> 5;
+            default -> 0;
+        };
+    }
+
+    private Set<Integer> plannedRouteNodeIds(int playerId) {
+        Set<Integer> ids = new HashSet<>();
+        for (Node node : plannedRouteNodes(playerId)) {
+            ids.add(node.getId());
+        }
+        return ids;
+    }
+
+    private List<Node> plannedRouteNodes(int playerId) {
+        return synergyPairService.getAll().stream()
+                .filter(pair -> pair.getRouteNodes() != null && !pair.getRouteNodes().isEmpty())
+                .filter(pair -> pairBelongsToPlayer(pair, playerId))
+                .max(Comparator.comparingInt(SynergyPair::getScore))
+                .map(SynergyPair::getRouteNodes)
+                .orElse(List.of());
+    }
+
+    private boolean pairBelongsToPlayer(SynergyPair pair, int playerId) {
+        return pair.getRouteNodes().stream()
+                .anyMatch(node -> node.getOwner() != null && node.getOwner().getId() == playerId);
+    }
+
+    private boolean hasOwnedIncidentRoad(int nodeId, int playerId) {
+        return edgeService.getAll().stream()
+                .anyMatch(edge -> edge.getOwner() != null
+                        && edge.getOwner().getId() == playerId
+                        && (edge.getNode1().getId() == nodeId || edge.getNode2().getId() == nodeId));
+    }
+
+    private Map<Integer, List<Edge>> edgesByNode() {
+        Map<Integer, List<Edge>> edgesByNode = new HashMap<>();
+        for (Edge edge : edgeService.getAll()) {
+            edgesByNode.computeIfAbsent(edge.getNode1().getId(), ignored -> new ArrayList<>()).add(edge);
+            edgesByNode.computeIfAbsent(edge.getNode2().getId(), ignored -> new ArrayList<>()).add(edge);
+        }
+        return edgesByNode;
+    }
+
+    private Map<Integer, Node> nodesById() {
+        Map<Integer, Node> nodes = new HashMap<>();
+        for (Node node : nodeService.getAll()) {
+            nodes.put(node.getId(), node);
+        }
+        return nodes;
+    }
+
+    private int otherNodeId(Edge edge, int nodeId) {
+        return edge.getNode1().getId() == nodeId ? edge.getNode2().getId() : edge.getNode1().getId();
+    }
+
+    private int controlledPlayerId() {
+        if (autoOpponents && playerIds.size() >= 3) {
+            return playerIds.get(2);
+        }
+        return currentPlayerId == null ? 0 : currentPlayerId;
     }
 
     private void addMissingResourceTrades(List<GoalAdviceDto> advice, Player player, List<Player> players,

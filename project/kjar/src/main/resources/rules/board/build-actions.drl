@@ -1,8 +1,13 @@
 package rules.board
 
 import com.ftn.sbnz.model.BuildActionFact
+import com.ftn.sbnz.model.Resource
+import com.ftn.sbnz.kjar.BlockadeThreat
 import com.ftn.sbnz.kjar.GoalAdvice
 import com.ftn.sbnz.kjar.GoalNeed
+import com.ftn.sbnz.kjar.ResourceProductionSignal
+import com.ftn.sbnz.kjar.RoadBuildEvent
+import com.ftn.sbnz.kjar.TradeSignal
 import com.ftn.sbnz.kjar.VictoryGoal
 
 // 39. Wood + brick allow a road if the service found an open legal edge.
@@ -142,4 +147,102 @@ when
 then
     insert(new GoalAdvice(12, "Spend before a 7",
             "You have more than 6 cards and still cannot build the wanted town. Build any legal road or village now to reduce robber risk if a 7 is rolled."));
+end
+
+rule "CEP 12 - Road building near planned longest road creates blockade threat"
+salience 120
+when
+    $event : RoadBuildEvent(playerId != mePlayerId,
+                            distanceToRoute >= 0,
+                            distanceToRoute < 3,
+                            $playerId : playerId,
+                            $edgeId : edgeId,
+                            $direction : direction,
+                            $distance : distanceToRoute,
+                            $previousDistance : previousDistanceToRoute)
+    VictoryGoal($myDistance : roadsMissingForPlannedRoute,
+                $opponentRoadCards : opponentRoadCards,
+                $myRoadCards : myRoadCards)
+    not BlockadeThreat(playerId == $playerId, edgeId == $edgeId)
+then
+    insert(new BlockadeThreat($playerId, $edgeId, $direction, $distance,
+            $previousDistance, $myDistance, $opponentRoadCards, $myRoadCards));
+end
+
+rule "CEP 13/14 - Score blockade threat from distance, trend, production and trades"
+salience 110
+when
+    $threat : BlockadeThreat(scoringDone == false,
+                             $playerId : playerId,
+                             $distance : distanceToRoute,
+                             $previousDistance : previousDistanceToRoute,
+                             $myDistance : myDistanceToPlan,
+                             $opponentRoadCards : opponentRoadCards,
+                             $myRoadCards : myRoadCards)
+    $production : Number() from accumulate(
+        ResourceProductionSignal(playerId == $playerId,
+                                 $weightedProduction : weightedScore),
+        sum($weightedProduction)
+    )
+    $trade : Number() from accumulate(
+        TradeSignal(playerId == $playerId,
+                    $weightedTrade : weightedScore),
+        sum($weightedTrade)
+    )
+then
+    double base = (3 - $distance) * 12.0;
+    double approach = $previousDistance > $distance ? ($previousDistance - $distance) * 10.0 : 0.0;
+    double critical = $distance <= 1 ? 14.0 : 0.0;
+    double race = $distance < $myDistance ? 12.0 : ($distance == $myDistance ? 6.0 : 0.0);
+    double roadCards = ($opponentRoadCards - $myRoadCards) * 4.0;
+    double score = base + approach + critical + race + $production.doubleValue()
+            + $trade.doubleValue() + roadCards;
+    modify($threat) {
+        setScore(Math.max(0.0, score)),
+        setScoringDone(true)
+    }
+end
+
+rule "CEP - High blockade threat advice"
+salience 100
+when
+    $threat : BlockadeThreat(scoringDone == true,
+                             score >= 45.0,
+                             $playerId : playerId,
+                             $direction : direction,
+                             $distance : distanceToRoute,
+                             $previousDistance : previousDistanceToRoute,
+                             $myDistance : myDistanceToPlan,
+                             $opponentRoadCards : opponentRoadCards,
+                             $myRoadCards : myRoadCards,
+                             $score : score)
+    not GoalAdvice(title == "Blockade threat")
+then
+    insert(new GoalAdvice(0, "Blockade threat",
+            "CEP alarm: Player " + $playerId + " is approaching from " + $direction
+            + ". Opponent is " + $distance + " road(s) from your planned longest-road route"
+            + ($previousDistance > $distance ? " and moved " + ($previousDistance - $distance) + " road(s) closer in the 3-turn window." : ".")
+            + " You still need " + $myDistance + " road(s) for the plan. Road cards now: opponent "
+            + $opponentRoadCards + ", you " + $myRoadCards + ". Threat score "
+            + Math.round($score) + ": build the contested road or trade for Wood/Brick immediately."));
+end
+
+rule "CEP - Medium blockade threat advice"
+salience 90
+when
+    $threat : BlockadeThreat(scoringDone == true,
+                             score >= 25.0,
+                             score < 45.0,
+                             $playerId : playerId,
+                             $direction : direction,
+                             $distance : distanceToRoute,
+                             $myDistance : myDistanceToPlan,
+                             $score : score)
+    not GoalAdvice(title == "Watch blockade route")
+then
+    insert(new GoalAdvice(2, "Watch blockade route",
+            "CEP warning: Player " + $playerId + " is " + $distance
+            + " road(s) from your planned longest-road route, from " + $direction
+            + ". You need " + $myDistance + " road(s) for your plan. Threat score "
+            + Math.round($score) + ": you still have time, but prioritize Wood/Brick and the next road."));
 end

@@ -13,6 +13,7 @@ import org.kie.api.builder.Message;
 import org.kie.api.runtime.KieSession;
 
 import com.ftn.sbnz.model.BuildActionFact;
+import com.ftn.sbnz.model.Resource;
 
 class BuildActionRuleTest {
 
@@ -119,6 +120,51 @@ class BuildActionRuleTest {
                 .anyMatch(item -> item.getTitle().equals("Upgrade a village to town")
                         && item.getDescription().contains("node 12")
                         && item.getDescription().contains("score 17")));
+    }
+
+    @Test
+    void cepRaisesHighBlockadeThreatWhenOpponentApproachesWithRoadResources() {
+        VictoryGoal goal = new VictoryGoal(1, 6);
+        goal.setRoadsMissingForPlannedRoute(3);
+        goal.setMyRoadCards(0);
+        goal.setOpponentRoadCards(2);
+
+        RoadBuildEvent road = new RoadBuildEvent(2, 1, 44, 7, 1, 3, "east");
+        ResourceProductionSignal wood = new ResourceProductionSignal(2, Resource.WOOD, 15.0);
+        ResourceProductionSignal brick = new ResourceProductionSignal(2, Resource.BRICK, 12.0);
+        TradeSignal trade = new TradeSignal(2, Resource.BRICK, 7, true, 3.0);
+
+        List<GoalAdvice> advice = fireRules(goal, road, wood, brick, trade).stream()
+                .filter(GoalAdvice.class::isInstance)
+                .map(GoalAdvice.class::cast)
+                .toList();
+
+        assertTrue(advice.stream()
+                .anyMatch(item -> item.getTitle().equals("Blockade threat")
+                        && item.getDescription().contains("moved 2 road(s) closer")
+                        && item.getDescription().contains("Threat score")));
+    }
+
+    @Test
+    void cepRaisesMediumWarningForNearbyOpponentWithLightResourceSignals() {
+        VictoryGoal goal = new VictoryGoal(1, 6);
+        goal.setRoadsMissingForPlannedRoute(2);
+        goal.setMyRoadCards(0);
+        goal.setOpponentRoadCards(0);
+
+        RoadBuildEvent road = new RoadBuildEvent(2, 1, 45, 7, 2, 2, "north");
+        ResourceProductionSignal wood = new ResourceProductionSignal(2, Resource.WOOD, 9.0);
+
+        List<GoalAdvice> advice = fireRules(goal, road, wood).stream()
+                .filter(GoalAdvice.class::isInstance)
+                .map(GoalAdvice.class::cast)
+                .toList();
+
+        assertTrue(advice.stream()
+                .anyMatch(item -> item.getTitle().equals("Watch blockade route")
+                        && item.getDescription().contains("from north")));
+        assertFalse(advice.stream()
+                .anyMatch(item -> item.getTitle().equals("Blockade threat")));
     }
 
     private static List<Object> fireRules(Object... facts) {
