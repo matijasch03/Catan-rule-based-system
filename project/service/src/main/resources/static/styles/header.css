@@ -1,0 +1,95 @@
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 28px;
+    background: #0c1822;
+    border-bottom: 1px solid #1f3445;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 22px;
+    letter-spacing: 0.5px;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mode {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    padding: 6px 12px;
+    border: 1px solid #1f3445;
+    border-radius: 8px;
+    background: #11202e;
+}
+
+.mode legend {
+    padding: 0 6px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #7f99ab;
+}
+
+.mode label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.mode input {
+    accent-color: #2f8f4e;
+    cursor: pointer;
+}
+
+header button {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 22px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.08s ease, filter 0.15s ease;
+}
+
+#newgame-btn {
+    background: #2f8f4e;
+    color: #fff;
+}
+
+#reload-btn {
+    background: #e3b505;
+    color: #2a1a00;
+}
+
+#cep-scenario-btn {
+    background: #b7432c;
+    color: #fff;
+}
+
+#cep-toggle-btn {
+    background: #315f7a;
+    color: #fff;
+}
+
+header button:hover {
+    filter: brightness(1.08);
+}
+
+header button:active {
+    transform: translateY(1px);
+}
+
+header button:disabled {
+    opacity: 0.6;
+    cursor: default;
+}

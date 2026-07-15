@@ -1,0 +1,435 @@
+.panel {
+    width: 100%;
+    background: #0c1822;
+    border: 1px solid #1f3445;
+    border-radius: 12px;
+    padding: 14px 16px;
+    max-height: calc(100vh - 116px);
+    overflow-y: auto;
+}
+
+.panel[hidden] {
+    display: none;
+}
+
+.advice-panel-column {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.advice-panel-column section[hidden],
+.game-panel-column section[hidden] {
+    display: none;
+}
+
+.panel h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #7f99ab;
+    margin: 14px 0 8px;
+}
+
+.panel h2:first-child {
+    margin-top: 0;
+}
+
+.players,
+.legend {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.legend {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 10px;
+}
+
+.players li,
+.legend li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 0;
+    font-size: 13px;
+}
+
+.players li {
+    flex-wrap: nowrap;
+    width: 100%;
+}
+
+.player-name {
+    white-space: nowrap;
+}
+
+.players li.active {
+    font-weight: 700;
+    color: #ffd34d;
+}
+
+.swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    background: #888;
+    flex: 0 0 auto;
+}
+
+.swatch.piece-village {
+    background: #e8821a;
+    width: 13px;
+    height: 13px;
+    clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%);
+}
+
+.swatch.piece-town {
+    background: #e8821a;
+    width: 26px;
+    height: 26px;
+    clip-path: polygon(50% 0, 100% 38%, 100% 100%, 0 100%, 0 38%);
+}
+
+.swatch.piece-road {
+    background: #e8821a;
+    height: 6px;
+    border-radius: 3px;
+}
+
+.swatch.advice-best {
+    border-radius: 50%;
+    background: #ff7a59;
+    box-shadow: 0 0 0 2px #ffe1d7 inset;
+}
+
+.swatch.advice-second {
+    border-radius: 50%;
+    background: #35c2ff;
+    box-shadow: 0 0 0 2px #d9f9ff inset;
+}
+
+.swatch.advice-checkpoint {
+    border-radius: 50%;
+    background: #7bd88f;
+    box-shadow: 0 0 0 2px #ecfff0 inset;
+}
+
+.swatch.advice-selected {
+    border-radius: 50%;
+    background: #ffd34d;
+}
+
+.swatch.advice-route-best {
+    background: #ff7a59;
+    height: 6px;
+    border-radius: 3px;
+    opacity: 0.8;
+}
+
+.swatch.advice-route-second {
+    background: #35c2ff;
+    height: 6px;
+    border-radius: 3px;
+    opacity: 0.8;
+}
+
+.player-score {
+    white-space: nowrap;
+    color: #f3c969;
+}
+
+.players li.winner {
+    box-shadow: 0 0 0 2px #f3c969;
+}
+
+.res-tally {
+    margin-left: auto;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: #cde0ef;
+    white-space: nowrap;
+}
+
+.advice-list {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.advice-list li {
+    padding: 0;
+    margin-bottom: 10px;
+}
+
+.advice-details {
+    margin: 5px 0 0;
+    padding: 11px 12px;
+    border-left: 4px solid #6fd0ff;
+    background: rgba(10, 27, 41, 0.92);
+    color: #eef8ff;
+    font-size: 15px;
+    line-height: 1.5;
+    box-shadow: inset 0 0 0 1px rgba(111, 208, 255, 0.18), 0 8px 18px rgba(0, 0, 0, 0.24);
+}
+
+.advice-details p {
+    margin: 0 0 6px;
+}
+
+.advice-details p:last-child {
+    margin-bottom: 0;
+}
+
+.advice {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid #315064;
+    border-radius: 7px;
+    padding: 11px 12px;
+    background: #183249;
+    color: #eef3f7;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 800;
+    box-shadow: 0 0 0 1px rgba(111, 208, 255, 0.28), 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.advice-1 {
+    border-color: #e53935;
+}
+
+.advice-2 {
+    border-color: #1e88e5;
+}
+
+.advice span {
+    color: #9fc0d5;
+}
+
+.goal-list {
+    margin: 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.goal-list li {
+    margin-bottom: 12px;
+    padding: 15px 16px;
+    border: 2px solid #4fa9d4;
+    border-radius: 8px;
+    background: rgba(13, 37, 56, 0.96);
+    box-shadow: 0 0 0 1px rgba(111, 208, 255, 0.24), 0 14px 30px rgba(0, 0, 0, 0.34);
+}
+
+.goal-list li:last-child {
+    margin-bottom: 0;
+}
+
+.goal-list strong {
+    display: block;
+    color: #ffffff;
+    font-size: 18px;
+    line-height: 1.3;
+}
+
+.goal-list p {
+    margin: 9px 0 0;
+    color: #e5f4ff;
+    font-size: 15px;
+    line-height: 1.55;
+}
+
+.goal-analysis {
+    margin-top: 12px;
+    padding: 12px 13px;
+    border: 1px solid rgba(128, 218, 255, 0.42);
+    border-radius: 7px;
+    background: rgba(5, 17, 28, 0.72);
+}
+
+.goal-analysis-title {
+    display: block;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 800;
+    margin-bottom: 8px;
+}
+
+.goal-analysis ul {
+    margin: 0;
+    padding-left: 18px;
+}
+
+.goal-analysis li {
+    margin: 0 0 8px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    color: #e8f7ff;
+    font-size: 15px;
+    line-height: 1.45;
+    list-style: disc;
+}
+
+.goal-analysis li:last-child {
+    margin-bottom: 0;
+}
+
+.trade-advice-btn {
+    margin-top: 8px;
+    border: 1px solid #5aa2c8;
+    border-radius: 7px;
+    padding: 7px 10px;
+    background: #123044;
+    color: #eef3f7;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+@media (max-width: 1040px) {
+    .panel {
+        max-width: 640px;
+        max-height: none;
+    }
+}
+
+.trade-advice-btn:hover {
+    border-color: #ffd34d;
+    color: #ffd34d;
+}
+
+.end-turn {
+    width: 100%;
+    margin-top: 10px;
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    background: #2f8f4e;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.build-panel {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.build-panel[hidden] {
+    display: none;
+}
+
+.build-panel button {
+    width: 100%;
+    border: 1px solid #315064;
+    border-radius: 8px;
+    min-height: 40px;
+    padding: 8px 8px;
+    background: #142838;
+    color: #eef3f7;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.build-panel button:not(:disabled):hover {
+    border-color: #ffd34d;
+}
+
+.build-panel button.active {
+    border-color: #ffd34d;
+    color: #ffd34d;
+}
+
+.build-panel button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.end-turn:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.dice-panel {
+    margin-top: 14px;
+    border-top: 1px solid #1f3445;
+}
+
+.dice-rolls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dice-roll {
+    display: grid;
+    grid-template-columns: 1fr 27px 27px 34px;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+}
+
+.dice-player {
+    color: #cde0ef;
+}
+
+.die {
+    display: inline-grid;
+    place-items: center;
+    width: 27px;
+    height: 27px;
+    border-radius: 5px;
+    background: #f4ecd6;
+    color: #172430;
+    font-weight: 800;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+    animation: dice-pop 0.35s ease-out both;
+}
+
+.dice-roll:nth-child(2) .die {
+    animation-delay: 0.12s;
+}
+
+.dice-roll:nth-child(3) .die {
+    animation-delay: 0.24s;
+}
+
+@keyframes dice-pop {
+    from {
+        transform: rotate(-25deg) scale(0.55);
+        opacity: 0;
+    }
+
+    to {
+        transform: rotate(0) scale(1);
+        opacity: 1;
+    }
+}
+
+.dice-sum {
+    color: #ffd34d;
+}
+
+.dice-resources {
+    grid-column: 1 / -1;
+    color: #9fb4c4;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.status {
+    margin: 0;
+    min-height: 18px;
+    color: #cddae5;
+    font-size: 14px;
+    line-height: 1.5;
+}

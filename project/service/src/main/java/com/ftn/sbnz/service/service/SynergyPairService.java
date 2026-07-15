@@ -8,10 +8,16 @@ import org.springframework.stereotype.Service;
 import com.ftn.sbnz.model.SynergyPair;
 import com.ftn.sbnz.service.repository.SynergyPairRepository;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+
 @Service
 public class SynergyPairService {
 
     private final SynergyPairRepository repository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public SynergyPairService(SynergyPairRepository repository) {
         this.repository = repository;
@@ -23,6 +29,10 @@ public class SynergyPairService {
 
     public List<SynergyPair> getAll() {
         return repository.findAll();
+    }
+
+    public SynergyPair save(SynergyPair synergyPair) {
+        return repository.save(synergyPair);
     }
 
     public Optional<SynergyPair> getById(int id) {
@@ -46,5 +56,11 @@ public class SynergyPairService {
             return true;
         }
         return false;
+    }
+
+    public void deleteAll() {
+        repository.deleteAll();
+        repository.flush();
+        entityManager.clear();
     }
 }

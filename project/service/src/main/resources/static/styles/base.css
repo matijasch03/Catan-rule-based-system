@@ -1,0 +1,66 @@
+:root {
+    --hex-size: 62px;
+    --sea: #2a6f97;
+    --wood: #2f6b32;
+    --wool: #7cb342;
+    --grain: #e3b505;
+    --brick: #c1532a;
+    --ore: #7d8a96;
+    --desert: #d8c188;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, sans-serif;
+    background: #11202e;
+    color: #eef3f7;
+}
+
+main {
+    display: grid;
+    grid-template-columns: max-content minmax(310px, 340px) minmax(390px, 1fr);
+    align-items: flex-start;
+    justify-content: stretch;
+    gap: 18px;
+    padding: 32px 16px;
+    width: min(100%, 1660px);
+    margin: 0 auto;
+}
+
+.board-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    width: var(--board-width, fit-content);
+    max-width: 100%;
+    min-width: 0;
+}
+
+@media (max-width: 1320px) {
+    main {
+        grid-template-columns: max-content minmax(360px, 1fr);
+    }
+
+    .advice-panel-column {
+        grid-column: 2;
+    }
+}
+
+@media (max-width: 1040px) {
+    main {
+        grid-template-columns: 1fr;
+        justify-items: center;
+    }
+
+    .board-wrap,
+    .panel,
+    .advice-panel-column,
+    .game-panel-column {
+        grid-column: auto;
+    }
+}

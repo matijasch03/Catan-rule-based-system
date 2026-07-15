@@ -1,0 +1,66 @@
+.hand {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    background: #0c1822;
+    border: 1px solid #1f3445;
+    border-radius: 12px;
+    padding: 10px 12px 12px;
+}
+
+.hand h2 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #7f99ab;
+}
+
+.hand-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    min-height: 80px;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.hand-empty {
+    margin: 0;
+    color: #7f99ab;
+    font-size: 14px;
+}
+
+.card {
+    flex: 0 0 auto;
+    width: 64px;
+    height: 78px;
+    border-radius: 7px;
+    background: #f3ead3;
+    border: 2px solid var(--card-accent, #7f99ab);
+    box-shadow: 0 4px 9px rgba(0, 0, 0, 0.32);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    transition: transform 0.1s ease;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+}
+
+.card-icon {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.card-name {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--card-accent, #2a1a00);
+    text-transform: uppercase;
+    letter-spacing: 0;
+}

@@ -1,0 +1,190 @@
+package rules.board
+
+import com.ftn.sbnz.model.Hexagon;
+import com.ftn.sbnz.model.Node;
+import com.ftn.sbnz.model.Resource;
+import com.ftn.sbnz.model.SynergyPair;
+import com.ftn.sbnz.kjar.BestNode;
+import com.ftn.sbnz.kjar.NodeDistance;
+import com.ftn.sbnz.kjar.RankingRequest;
+import com.ftn.sbnz.kjar.SettlementBuilding;
+
+function int diceWeight(int dots) {
+    switch (dots) {
+        case 2:
+        case 12: return 1;
+        case 3:
+        case 11: return 2;
+        case 4:
+        case 10: return 3;
+        case 5:
+        case 9: return 4;
+        case 6:
+        case 8: return 5;
+        default: return 0;
+    }
+}
+
+// The service calculates graph distance; the rule only reacts to the event.
+rule "Block nodes near an opponent settlement"
+salience 60
+no-loop true
+when
+    $event : SettlementBuilding(playerId != mePlayerId, $blocked : blockedNodeIds)
+    $node : Node(available == true, $id : id)
+    eval($blocked.contains($id))
+then
+    $node.setAvailable(false);
+    $node.addTag("Unavailable");
+    update($node);
+end
+
+// Standard Catan distance rule also applies to the player's earlier settlement.
+rule "Block nodes adjacent to my settlement"
+salience 60
+no-loop true
+when
+    $event : SettlementBuilding(playerId == mePlayerId, $blocked : blockedNodeIds)
+    $node : Node(available == true, $id : id)
+    eval($blocked.contains($id))
+then
+    $node.setAvailable(false);
+    $node.addTag("Unavailable");
+    update($node);
+end
+
+rule "Calculate node probability score"
+salience 50
+no-loop true
+when
+    $node : Node(tags not contains "Scored", $hexes : adjacentHexagons)
+    $baseScore : Number() from accumulate(
+        Hexagon($dots : dots) from $hexes,
+        sum(diceWeight($dots))
+    )
+then
+    $node.setScore($baseScore.intValue());
+    $node.addTag("Scored");
+    update($node);
+end
+
+rule "Add diversity bonus"
+salience 40
+no-loop true
+when
+    $node : Node(tags contains "Scored", tags not contains "Diversity",
+                 $score : score, $hexes : adjacentHexagons)
+    $resources : java.util.Set(size > 2) from accumulate(
+        Hexagon(field != null, field != Resource.DESERT, $resource : field) from $hexes,
+        collectSet($resource)
+    )
+then
+    $node.setScore((int) Math.round($score * 1.20));
+    $node.addTag("Diversity");
+    update($node);
+end
+
+rule "Add BigYield tag and fixed bonus"
+salience 30
+no-loop true
+when
+    $node : Node(tags contains "Scored", tags not contains "BigYield",
+                 $score : score, $hexes : adjacentHexagons)
+    exists Hexagon(dots == 6 || dots == 8) from $hexes
+then
+    $node.setScore($score + 2);
+    $node.addTag("BigYield");
+    update($node);
+end
+
+rule "Select BestCandidate with max accumulate"
+salience 10
+no-loop true
+when
+    $request : RankingRequest(nextRank == 1)
+    $max : Number($maxScore : intValue) from accumulate(
+        Node(owner == null, available == true, $score : score),
+        max($score)
+    )
+    $node : Node(owner == null, available == true,
+                 score == $maxScore, $id : id)
+    not Node(owner == null, available == true,
+             score == $maxScore, id < $id)
+then
+    $node.addTag("BestCandidate");
+    update($node);
+    insert(new BestNode($id, $maxScore, 1));
+    $request.setNextRank(2);
+    update($request);
+end
+
+rule "Select second candidate with max accumulate"
+salience 5
+no-loop true
+when
+    $request : RankingRequest(nextRank == 2)
+    $max : Number($maxScore : intValue) from accumulate(
+        Node(owner == null, available == true,
+             tags not contains "BestCandidate", $score : score),
+        max($score)
+    )
+    $node : Node(owner == null, available == true,
+                 tags not contains "BestCandidate", score == $maxScore, $id : id)
+    not Node(owner == null, available == true,
+             tags not contains "BestCandidate", score == $maxScore, id < $id)
+then
+    $node.addTag("SecondCandidate");
+    update($node);
+    insert(new BestNode($id, $maxScore, 2));
+    $request.setNextRank(3);
+    update($request);
+end
+
+rule "Create synergy pair for close positive nodes"
+salience 0
+no-loop true
+when
+    $distance : NodeDistance(distance <= 6,
+                             $node1 : node1, $node2 : node2,
+                             $pathDistance : distance, $routeNodes : routeNodes,
+                             $checkPoints : checkPoints)
+    Node(this == $node1, score > 0, $score1 : score)
+    Node(this == $node2, score > 0, $score2 : score)
+    not SynergyPair(node1 == $node1, node2 == $node2)
+then
+    SynergyPair pair = new SynergyPair(0, $node1, $node2, $pathDistance, $score1 + $score2);
+    pair.setRouteNodes($routeNodes);
+    pair.setCheckPoints($checkPoints);
+    insert(pair);
+end
+
+rule "Add free path synergy bonus"
+salience -5
+no-loop true
+when
+    NodeDistance(freePath == true, $node1 : node1, $node2 : node2)
+    $pair : SynergyPair(node1 == $node1, node2 == $node2,
+                        tags not contains "FreePathBonus",
+                        $score : score)
+then
+    $pair.setScore($score + 200);
+    $pair.addTag("FreePathBonus");
+    update($pair);
+end
+
+rule "Add checkpoint scores to synergy pair"
+salience -10
+no-loop true
+when
+    $pair : SynergyPair(tags not contains "CheckpointScore",
+                        $checkPoints : checkPoints, $score : score)
+    eval($checkPoints != null && !$checkPoints.isEmpty())
+    $checkpointScore : Number() from accumulate(
+        Node($nodeScore : score) from $checkPoints,
+        sum($nodeScore)
+    )
+then
+    $pair.setScore($score + $checkpointScore.intValue());
+    $pair.addTag("CheckpointScore");
+    update($pair);
+end

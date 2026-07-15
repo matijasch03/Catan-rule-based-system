@@ -1,7 +1,9 @@
 package com.ftn.sbnz.model;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -11,6 +13,8 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderColumn;
+import jakarta.persistence.Transient;
 
 @Entity
 public class SynergyPair {
@@ -37,6 +41,17 @@ public class SynergyPair {
     )
     private List<Node> checkPoints;
 
+    @Transient
+    private Set<String> tags = new HashSet<>();
+
+    @ManyToMany
+    @JoinTable(
+        name = "synergy_pair_route_nodes",
+        joinColumns = @JoinColumn(name = "synergy_pair_id"),
+        inverseJoinColumns = @JoinColumn(name = "node_id")
+    )
+    @OrderColumn(name = "route_order")
+    private List<Node> routeNodes = new ArrayList<>();
     
     public SynergyPair() {
         this.checkPoints = new ArrayList<>();
@@ -99,6 +114,28 @@ public class SynergyPair {
 
     public void addCheckPoint(Node node) {
         this.checkPoints.add(node);
+    }
+
+    public List<Node> getRouteNodes() {
+        if (routeNodes == null) {
+            routeNodes = new ArrayList<>();
+        }
+        return routeNodes;
+    }
+
+    public void setRouteNodes(List<Node> routeNodes) {
+        this.routeNodes = routeNodes;
+    }
+
+    public Set<String> getTags() {
+        if (tags == null) {
+            tags = new HashSet<>();
+        }
+        return tags;
+    }
+
+    public void addTag(String tag) {
+        getTags().add(tag);
     }
 
     @Override

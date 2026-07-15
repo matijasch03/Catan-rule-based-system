@@ -10,6 +10,8 @@ import org.kie.api.runtime.KieSession;
 import com.ftn.sbnz.model.Hexagon;
 import com.ftn.sbnz.model.Node;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class RuleRunner {
@@ -19,7 +21,15 @@ public class RuleRunner {
             var kfs = ks.newKieFileSystem();
             kfs.write("src/main/resources/rules/board/node-scoring.drl",
                     ks.getResources().newClassPathResource("rules/board/node-scoring.drl", RuleRunner.class));
-
+            try (InputStream template = RuleRunner.class.getClassLoader()
+                    .getResourceAsStream("rules/board/resource_priority.drt");
+                 InputStream data = RuleRunner.class.getClassLoader()
+                    .getResourceAsStream("rules/board/resource_priority.data")) {
+                String generated = ResourcePriorityTemplateCompiler.compile(template, data);
+                kfs.write("src/main/resources/rules/board/resource-priority-generated.drl",
+                        ks.getResources().newByteArrayResource(
+                                generated.getBytes(StandardCharsets.UTF_8)));
+            }
             KieBuilder kb = ks.newKieBuilder(kfs);
             kb.buildAll();
             Results results = kb.getResults();
@@ -40,6 +50,7 @@ public class RuleRunner {
             for (Node n : nodes) System.out.println(n);
 
             for (Node n : nodes) ksession.insert(n);
+            ksession.insert(new RankingRequest());
             ksession.fireAllRules();
 
             System.out.println("\nNodes after rules:");

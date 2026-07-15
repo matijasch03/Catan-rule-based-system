@@ -1,0 +1,57 @@
+package rules.board
+
+import com.ftn.sbnz.model.PlayerScoreFact
+
+// 42. Every village is worth one victory point.
+rule "42 - Score villages"
+salience 40
+when
+    $player : PlayerScoreFact(villagesScored == false, $villages : villageCount)
+then
+    modify($player) {
+        setScore($player.getScore() + $villages),
+        setVillagesScored(true)
+    }
+end
+
+// 43. Every town is worth two victory points.
+rule "43 - Score towns"
+salience 30
+when
+    $player : PlayerScoreFact(townsScored == false, $towns : townCount)
+then
+    modify($player) {
+        setScore($player.getScore() + 2 * $towns),
+        setTownsScored(true)
+    }
+end
+
+// 44/45. The longest road must contain at least five edges. If several roads
+// have the same length, the player who reached that length first keeps the bonus.
+rule "44 and 45 - Score longest road and resolve tie"
+salience 20
+when
+    $player : PlayerScoreFact(longestRoadAwarded == false,
+                              $id : playerId,
+                              $length : longestRoadLength >= 5,
+                              $reachedAt : longestRoadReachedAt)
+    not PlayerScoreFact(playerId != $id,
+                        longestRoadLength > $length)
+    not PlayerScoreFact(playerId != $id,
+                        longestRoadLength == $length,
+                        longestRoadReachedAt < $reachedAt)
+then
+    modify($player) {
+        setScore($player.getScore() + 2),
+        setLongestRoadAwarded(true)
+    }
+end
+
+// 46. Reaching exactly ten points wins the game.
+rule "46 - Player wins with ten points"
+salience 10
+when
+    $player : PlayerScoreFact(score == 10, winner == false)
+then
+    modify($player) { setWinner(true) }
+end

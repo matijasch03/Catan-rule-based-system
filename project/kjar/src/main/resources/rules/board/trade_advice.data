@@ -1,0 +1,9 @@
+object,resource,field,required,needType,canBuildFlag,requiredFlag
+town,ore,ore,3,TOWN_RESOURCES,canBuildTown,hasVillageToUpgrade
+town,grain,grain,2,TOWN_RESOURCES,canBuildTown,hasVillageToUpgrade
+village,wood,wood,1,VILLAGE,canBuildVillage,hasLegalVillageNode
+village,brick,brick,1,VILLAGE,canBuildVillage,hasLegalVillageNode
+village,grain,grain,1,VILLAGE,canBuildVillage,hasLegalVillageNode
+village,wool,wool,1,VILLAGE,canBuildVillage,hasLegalVillageNode
+road,wood,wood,1,VILLAGE,canBuildRoad,hasOpenRoadEdge
+road,brick,brick,1,VILLAGE,canBuildRoad,hasOpenRoadEdge

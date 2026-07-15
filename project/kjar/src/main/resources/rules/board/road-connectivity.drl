@@ -1,0 +1,16 @@
+package rules.board
+
+import com.ftn.sbnz.kjar.RoadLink
+
+// Backward-chaining query for road planning.
+// "Can start connect to target?" is true if there is a direct legal link to
+// target, or if start can move to another node that can recursively connect.
+query canConnect(Integer startNodeId, Integer targetNodeId)
+    RoadLink(fromNodeId == startNodeId, targetNodeId == targetNodeId, toNodeId == targetNodeId)
+    or
+    (
+        RoadLink(fromNodeId == startNodeId, targetNodeId == targetNodeId, $nextNodeId : toNodeId)
+        and
+        canConnect($nextNodeId, targetNodeId; )
+    )
+end

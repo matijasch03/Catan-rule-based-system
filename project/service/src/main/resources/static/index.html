@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Catan Board</title>
+    <link rel="stylesheet" href="style.css?v=20260715-hand-wrap-tune" />
+</head>
+<body>
+    <header>
+        <h1>Catan Board</h1>
+        <div class="actions">
+            <fieldset class="mode">
+                <legend>Players 1 &amp; 2</legend>
+                <label><input type="radio" name="opponents" value="computer" checked /> Computer</label>
+                <label><input type="radio" name="opponents" value="me" /> I play them</label>
+            </fieldset>
+            <button id="newgame-btn" type="button">New Game</button>
+            <button id="cep-scenario-btn" type="button">CEP Scenario</button>
+            <button id="cep-toggle-btn" type="button" hidden>Pause</button>
+            <button id="reload-btn" type="button">Reload</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="board-wrap">
+            <div id="board" class="board"></div>
+
+            <section class="hand">
+                <h2>Your hand</h2>
+                <div id="hand-cards" class="hand-cards"></div>
+            </section>
+        </div>
+
+        <aside class="panel game-panel-column">
+            <h2>Players</h2>
+            <ul id="players" class="players"></ul>
+
+            <h2>Pieces</h2>
+            <ul class="legend">
+                <li><span class="swatch piece-village"></span> Village</li>
+                <li><span class="swatch piece-road"></span> Road</li>
+                <li><span class="swatch piece-town"></span> Town</li>
+                <li><span class="swatch advice-best"></span> Best advised node pair</li>
+                <li><span class="swatch advice-route-best"></span> Best advised route</li>
+                <li><span class="swatch advice-second"></span> Second advised node pair</li>
+                <li><span class="swatch advice-route-second"></span> Second advised route</li>
+                <li><span class="swatch advice-checkpoint"></span> Settlement checkpoint</li>
+                <li><span class="swatch advice-selected"></span> Selected node</li>
+            </ul>
+
+            <h2>Turn</h2>
+            <p id="status" class="status"></p>
+            <section id="build-panel" class="build-panel" hidden>
+                <button id="build-road-btn" type="button" data-action="ROAD">Build road</button>
+                <button id="build-village-btn" type="button" data-action="VILLAGE">Build village</button>
+                <button id="build-town-btn" type="button" data-action="TOWN">Upgrade town</button>
+            </section>
+            <button id="end-turn-btn" class="end-turn" type="button" hidden>End turn</button>
+
+            <section id="dice-panel" class="dice-panel" hidden>
+                <h2>Dice rolls</h2>
+                <div id="dice-rolls" class="dice-rolls"></div>
+            </section>
+        </aside>
+
+        <aside id="advice-column" class="panel advice-panel-column" hidden>
+            <section id="advice-panel" hidden>
+                <h2>Opening advice</h2>
+                <ol id="advice-list" class="advice-list"></ol>
+            </section>
+
+            <section id="goal-panel" hidden>
+                <h2>10 VP plan</h2>
+                <ol id="goal-list" class="goal-list"></ol>
+            </section>
+        </aside>
+    </main>
+
+    <script type="module" src="app.js?v=20260715-hand-wrap-tune"></script>
+</body>
+</html>

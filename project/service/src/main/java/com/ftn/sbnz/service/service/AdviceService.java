@@ -8,10 +8,16 @@ import org.springframework.stereotype.Service;
 import com.ftn.sbnz.model.Advice;
 import com.ftn.sbnz.service.repository.AdviceRepository;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+
 @Service
 public class AdviceService {
 
     private final AdviceRepository repository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public AdviceService(AdviceRepository repository) {
         this.repository = repository;
@@ -46,5 +52,11 @@ public class AdviceService {
             return true;
         }
         return false;
+    }
+
+    public void deleteAll() {
+        repository.deleteAllInBatch();
+        repository.flush();
+        entityManager.clear();
     }
 }

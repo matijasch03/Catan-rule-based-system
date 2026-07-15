@@ -1,0 +1,29 @@
+template header
+object
+resource
+field
+required
+needType
+canBuildFlag
+requiredFlag
+
+package rules.board
+
+import com.ftn.sbnz.kjar.GoalAdvice
+import com.ftn.sbnz.kjar.GoalNeed
+import com.ftn.sbnz.kjar.VictoryGoal
+
+template "Missing Resource Trade Advice"
+
+rule "@{object} needs @{resource} trade"
+salience -52
+when
+    GoalNeed(type == "@{needType}")
+    VictoryGoal(@{canBuildFlag} == false, @{requiredFlag} == true, @{field} < @{required})
+    not GoalAdvice(title == "Trade for @{object} @{resource}")
+then
+    insert(new GoalAdvice(4, "Trade for @{object} @{resource}",
+            "You are collecting for a @{object} and still need @{resource}. Offer surplus resources now so this build path can continue."));
+end
+
+end template
