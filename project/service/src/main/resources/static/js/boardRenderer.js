@@ -34,6 +34,7 @@ function renderHexes(hexes) {
   const height = maxY - minY + hexH + PADDING * 2;
   boardEl.style.width = `${width}px`;
   boardEl.style.height = `${height}px`;
+  boardEl.parentElement?.style.setProperty("--board-width", `${width}px`);
 
   for (const hexData of hexes) {
     const { x, y } = hexCenterPx(hexData.q, hexData.r);

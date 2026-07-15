@@ -71,6 +71,16 @@ header button {
     color: #2a1a00;
 }
 
+#cep-scenario-btn {
+    background: #b7432c;
+    color: #fff;
+}
+
+#cep-toggle-btn {
+    background: #315f7a;
+    color: #fff;
+}
+
 header button:hover {
     filter: brightness(1.08);
 }

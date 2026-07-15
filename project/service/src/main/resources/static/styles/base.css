@@ -22,11 +22,13 @@ body {
 
 main {
     display: grid;
-    grid-template-columns: minmax(640px, auto) minmax(310px, 360px) minmax(270px, 320px);
+    grid-template-columns: max-content minmax(310px, 340px) minmax(390px, 1fr);
     align-items: flex-start;
-    justify-content: center;
+    justify-content: stretch;
     gap: 18px;
     padding: 32px 16px;
+    width: min(100%, 1660px);
+    margin: 0 auto;
 }
 
 .board-wrap {
@@ -34,11 +36,14 @@ main {
     display: flex;
     flex-direction: column;
     gap: 24px;
+    width: var(--board-width, fit-content);
+    max-width: 100%;
+    min-width: 0;
 }
 
 @media (max-width: 1320px) {
     main {
-        grid-template-columns: minmax(620px, auto) minmax(310px, 390px);
+        grid-template-columns: max-content minmax(360px, 1fr);
     }
 
     .advice-panel-column {

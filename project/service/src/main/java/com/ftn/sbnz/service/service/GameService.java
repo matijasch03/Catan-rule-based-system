@@ -49,9 +49,16 @@ public class GameService {
     };
     private static final int CEP_WINDOW_TURNS = 3;
     private static final int UNREACHABLE_ROUTE_DISTANCE = 99;
+    private static final int CEP_ROUTE_NODE_COUNT = 8;
+    private static final int[][] CEP_SCRIPT_DICE = {
+            {4, 4}, {3, 1}, {5, 4},
+            {3, 3}, {5, 5}, {2, 3},
+            {4, 4}, {6, 4}, {5, 3},
+    };
 
     private final NodeService nodeService;
     private final EdgeService edgeService;
+    private final HexagonService hexagonService;
     private final PlayerService playerService;
     private final PlacementAdviceService placementAdviceService;
     private final ScoringService scoringService;
@@ -77,13 +84,19 @@ public class GameService {
     private int turnSequence = 0;
     private final List<RoadBuildEvent> roadBuildEvents = new ArrayList<>();
     private final List<TradeSignal> tradeSignals = new ArrayList<>();
+    private boolean cepScriptMode = false;
+    private int cepScriptStep = 0;
+    private List<Integer> cepPlayerOneNode34To23Path = List.of();
+    private Integer cepPlayerOneNode23RoadTurn = null;
 
-    public GameService(NodeService nodeService, EdgeService edgeService, PlayerService playerService,
+    public GameService(NodeService nodeService, EdgeService edgeService, HexagonService hexagonService,
+                       PlayerService playerService,
                        PlacementAdviceService placementAdviceService, ScoringService scoringService,
                        BuildActionService buildActionService, GoalPlanningService goalPlanningService,
                        AdviceService adviceService, SynergyPairService synergyPairService) {
         this.nodeService = nodeService;
         this.edgeService = edgeService;
+        this.hexagonService = hexagonService;
         this.playerService = playerService;
         this.placementAdviceService = placementAdviceService;
         this.scoringService = scoringService;
@@ -111,6 +124,146 @@ public class GameService {
         this.autoOpponents = autoOpponents;
         step = 0;
         advanceToHuman();
+        return buildState();
+    }
+
+    public synchronized BoardStateDto cepScenario() {
+        resetBoard();
+        createPlayers();
+        applyCepScenarioTiles();
+        autoOpponents = true;
+
+        Player playerOne = playerService.getById(playerIds.get(0)).orElseThrow();
+        Player playerTwo = playerService.getById(playerIds.get(1)).orElseThrow();
+        Player me = playerService.getById(playerIds.get(2)).orElseThrow();
+
+        List<Node> route = plannedCepRoute();
+        if (route.size() < CEP_ROUTE_NODE_COUNT) {
+            throw new GameActionException(HttpStatus.CONFLICT, "CEP scenario cannot be created on the current board topology.");
+        }
+
+        placeSettlement(route.get(0), me, Settlement.VILLAGE);
+        placeSettlement(route.get(route.size() - 1), me, Settlement.VILLAGE);
+        for (int i = 0; i < 3 && i + 1 < route.size(); i++) {
+            placeRoad(edgeBetween(route.get(i), route.get(i + 1)), me);
+        }
+
+        createScenarioGoalPair(route);
+        placeProductionSettlements(playerOne, playerTwo, me);
+        forcePlayerOneNode12Village(playerOne);
+        setupPlayerOneNode34To23Path(playerOne);
+
+        List<Node> fastBlocker = approachPath(route, 5, 1);
+        List<Node> slowBlocker = approachPath(route, 6, 2);
+        if (fastBlocker.size() >= 1) {
+            placeSettlement(fastBlocker.get(0), playerOne, Settlement.TOWN);
+        }
+        if (slowBlocker.size() >= 1) {
+            placeSettlement(slowBlocker.get(0), playerTwo, Settlement.VILLAGE);
+        }
+
+        addResources(playerOne, Map.of(Resource.GRAIN, 1, Resource.WOOL, 1));
+        addResources(playerTwo, Map.of(Resource.WOOD, 1, Resource.BRICK, 1, Resource.WOOL, 1));
+        addResources(me, Map.of(Resource.WOOD, 1, Resource.GRAIN, 2, Resource.ORE, 2, Resource.WOOL, 1));
+
+        step = STEPS.length;
+        currentPlayerTurnIndex = 2;
+        currentPlayerId = me.getId();
+        turnSequence = 1;
+        lastDiceSum = 0;
+        cepScriptMode = true;
+        cepScriptStep = 0;
+
+        tradeAttempted = false;
+        tradeRefused = false;
+        phase = turnPhase("ROLLED");
+        turnMessage = "CEP script ready: three deterministic rounds will play automatically, with scripted dice and no random opponent turns.";
+        return buildState();
+    }
+
+    public synchronized BoardStateDto cepScenarioStep() {
+        if (!cepScriptMode || playerIds.size() < 3) {
+            return buildState();
+        }
+        Player playerOne = playerService.getById(playerIds.get(0)).orElseThrow();
+        Player playerTwo = playerService.getById(playerIds.get(1)).orElseThrow();
+        Player me = playerService.getById(playerIds.get(2)).orElseThrow();
+        currentPlayerTurnIndex = 2;
+        currentPlayerId = me.getId();
+        phase = turnPhase("ROLLED");
+
+        List<Node> route = plannedRouteNodes(me.getId());
+        if (route.size() < CEP_ROUTE_NODE_COUNT) {
+            cepScriptMode = false;
+            phase = "CEP_DONE";
+            turnMessage = "CEP script stopped: planned route is no longer available.";
+            return buildState();
+        }
+        if (cepScriptStep >= CEP_SCRIPT_DICE.length) {
+            cepScriptMode = false;
+            phase = "CEP_DONE";
+            turnMessage = "CEP script finished: each player took three scripted turns, the warnings arrived before the cut, and your route stayed open.";
+            return buildState();
+        }
+
+        List<Node> fastBlocker = approachPath(route, 5, 1);
+        List<Node> slowBlocker = approachPath(route, 6, 2);
+        Set<Integer> protectedRoute = route.stream().map(Node::getId).collect(java.util.stream.Collectors.toSet());
+        fastBlocker.forEach(node -> protectedRoute.add(node.getId()));
+        slowBlocker.forEach(node -> protectedRoute.add(node.getId()));
+        scriptedCepDice(cepScriptStep);
+        switch (cepScriptStep) {
+            case 0 -> {
+                scriptedEconomyRoad(playerOne, protectedRoute,
+                        "Round 1/3 - Player 1 builds from the town-side economy first. The town on wood/brick means this player can threaten roads quickly later.");
+            }
+            case 1 -> {
+                scriptedEconomyRoad(playerTwo, protectedRoute,
+                        "Round 1/3 - Player 2 expands more slowly and asks for a trade setup, but has only villages on wood/brick.");
+            }
+            case 2 -> {
+                scriptedMyRoad(me, route, 3,
+                        "Round 1/3 - You extend the planned longest-road corridor. Regular goal advice stays visible while the CEP script controls the move.");
+            }
+            case 3 -> {
+                scriptedPlayerOneNode23Road(playerOne);
+                tradeSignals.add(new TradeSignal(playerOne.getId(), Resource.BRICK, Resource.WOOL, turnSequence, false,
+                        resourceWeight(Resource.BRICK) * 0.4));
+                turnMessage = "Round 2/3 - Player 1 builds the missing road out of node 23, linking the prepared 34-23 pressure route. He offers Wool for your Brick, but you refuse.";
+            }
+            case 4 -> {
+                scriptedOpponentRoad(playerTwo, slowBlocker, 0, "Player 2 starts the slower cut and asks for a trade, but the trade fails.");
+                tradeSignals.add(new TradeSignal(playerTwo.getId(), Resource.WOOD, turnSequence, false,
+                        resourceWeight(Resource.WOOD) * 0.4));
+                turnMessage = "Round 2/3 - Player 2 starts a slower cut and asks for a wood trade. The trade fails, so this threat is weaker but still counted.";
+            }
+            case 5 -> {
+                scriptedMyRoad(me, route, 4,
+                        "Round 2/3 - You follow the blockade warning and claim the contested road before Player 1 can cut it.");
+            }
+            case 6 -> {
+                scriptedOpponentRoad(playerOne, fastBlocker, 0, "Player 1 tries the next approach segment, but your earlier road already protects the cut point.");
+                turnMessage = "Round 3/3 - Player 1 keeps pushing from the stronger town economy after the node 23 road and failed Wool-for-Brick trade.";
+            }
+            case 7 -> {
+                scriptedOpponentRoad(playerTwo, slowBlocker, 1, "Player 2 tries to continue the slower cut.");
+                tradeSignals.add(new TradeSignal(playerTwo.getId(), Resource.BRICK, turnSequence, false,
+                        resourceWeight(Resource.BRICK) * 0.4));
+                turnMessage = "Round 3/3 - Player 2 continues the distant pressure, but another failed trade keeps the blockade risk below Player 1's.";
+            }
+            case 8 -> {
+                scriptedMyRoad(me, route, 5,
+                        "Round 3/3 - You place the next route road and the planned longest-road corridor stays open.");
+            }
+            default -> {
+                cepScriptMode = false;
+                phase = "CEP_DONE";
+                turnMessage = "CEP script finished: each player took three scripted turns, the warnings arrived before the cut, and your route stayed open.";
+                return buildState();
+            }
+        }
+        cepScriptStep++;
+        turnSequence++;
         return buildState();
     }
 
@@ -307,17 +460,64 @@ public class GameService {
         int dice2 = random.nextInt(6) + 1;
         lastDiceSum = dice1 + dice2;
 
-        diceRolls.add(new DiceRollDto(currentPlayerId, currentPlayerTurnIndex + 1, dice1, dice2));
-        if (diceRolls.size() > playerIds.size()) {
-            diceRolls.remove(0);
-        }
-
         diceResourceNodes.clear();
         if (lastDiceSum == 7) {
             discardForSeven();
+            appendDiceRoll(currentPlayerId, currentPlayerTurnIndex + 1, dice1, dice2,
+                    List.of("No resources: robber rolled."));
             return;
         }
-        distributeDiceResources(lastDiceSum);
+        Map<Integer, List<String>> gained = distributeDiceResources(lastDiceSum);
+        appendDiceRoll(currentPlayerId, currentPlayerTurnIndex + 1, dice1, dice2,
+                resourceGainSummary(gained));
+    }
+
+    private void scriptedCepDice(int scriptStep) {
+        int[] dice = CEP_SCRIPT_DICE[scriptStep];
+        int playerIndex = scriptStep % playerIds.size();
+        int rollingPlayerId = playerIds.get(playerIndex);
+        lastDiceSum = dice[0] + dice[1];
+        diceResourceNodes.clear();
+        if (lastDiceSum == 7) {
+            discardForSeven();
+            appendDiceRoll(rollingPlayerId, playerIndex + 1, dice[0], dice[1],
+                    List.of("No resources: robber rolled."));
+            return;
+        }
+        Map<Integer, List<String>> gained = distributeDiceResources(lastDiceSum);
+        appendDiceRoll(rollingPlayerId, playerIndex + 1, dice[0], dice[1],
+                resourceGainSummary(gained));
+    }
+
+    private void appendDiceRoll(int playerId, int playerNumber, int dice1, int dice2, List<String> resourceSummary) {
+        diceRolls.add(new DiceRollDto(playerId, playerNumber, dice1, dice2, resourceSummary));
+        int maxRolls = cepScriptMode ? CEP_SCRIPT_DICE.length : playerIds.size();
+        while (diceRolls.size() > maxRolls) {
+            diceRolls.remove(0);
+        }
+    }
+
+    private List<String> resourceGainSummary(Map<Integer, List<String>> gainsByPlayer) {
+        if (gainsByPlayer.isEmpty()) {
+            return List.of("No resources gained.");
+        }
+        List<String> summary = new ArrayList<>();
+        for (int i = 0; i < playerIds.size(); i++) {
+            int playerId = playerIds.get(i);
+            List<String> gains = gainsByPlayer.getOrDefault(playerId, List.of());
+            if (gains.isEmpty()) {
+                continue;
+            }
+            Map<String, Integer> counts = new LinkedHashMap<>();
+            for (String gain : gains) {
+                counts.put(gain, counts.getOrDefault(gain, 0) + 1);
+            }
+            String resources = counts.entrySet().stream()
+                    .map(entry -> entry.getKey() + " x" + entry.getValue())
+                    .collect(java.util.stream.Collectors.joining(", "));
+            summary.add(playerLabel(i + 1) + ": " + resources);
+        }
+        return summary.isEmpty() ? List.of("No resources gained.") : summary;
     }
 
     private boolean isMainTurn() {
@@ -403,7 +603,8 @@ public class GameService {
         return cards;
     }
 
-    private void distributeDiceResources(int diceSum) {
+    private Map<Integer, List<String>> distributeDiceResources(int diceSum) {
+        Map<Integer, List<String>> gainsByPlayer = new HashMap<>();
         Set<Integer> processedHexIds = new HashSet<>();
 
         for (Hexagon hex : getHexagonsWithDots(diceSum)) {
@@ -435,10 +636,13 @@ public class GameService {
                 List<String> gained = diceResourceNodes.getOrDefault(node.getId(), new ArrayList<>());
                 for (int i = 0; i < amount; i++) {
                     gained.add(field.getDisplayName());
+                    gainsByPlayer.computeIfAbsent(owner.getId(), ignored -> new ArrayList<>())
+                            .add(field.getDisplayName());
                 }
                 diceResourceNodes.put(node.getId(), gained);
             }
         }
+        return gainsByPlayer;
     }
 
     private List<Hexagon> getHexagonsWithDots(int dots) {
@@ -549,15 +753,327 @@ public class GameService {
     }
 
     private void placeVillage(Node node, Player player) {
-        node.setSettlement(Settlement.VILLAGE);
+        placeSettlement(node, player, Settlement.VILLAGE);
+    }
+
+    private void placeSettlement(Node node, Player player, Settlement settlement) {
+        if (node == null || player == null) {
+            return;
+        }
+        node.setSettlement(settlement);
         node.setOwner(player);
         nodeService.updateById(node.getId(), node);
     }
 
     private void placeRoad(Edge edge, Player player) {
+        if (edge == null || player == null) {
+            return;
+        }
         edge.setOwner(player);
         edgeService.updateById(edge.getId(), edge);
         scoringService.recordRoadBuilt(player.getId());
+    }
+
+    private void applyCepScenarioTiles() {
+        Resource[] fields = {
+                Resource.ORE, Resource.WOOD, Resource.BRICK,
+                Resource.GRAIN, Resource.WOOD, Resource.WOOL, Resource.BRICK,
+                Resource.ORE, Resource.GRAIN, Resource.DESERT, Resource.WOOD, Resource.WOOL,
+                Resource.BRICK, Resource.GRAIN, Resource.WOOD, Resource.ORE,
+                Resource.WOOL, Resource.BRICK, Resource.GRAIN
+        };
+        int[] dots = {5, 8, 6, 9, 4, 10, 3, 11, 5, 0, 8, 6, 10, 4, 9, 3, 11, 2, 12};
+        List<Hexagon> hexes = hexagonService.getAll().stream()
+                .sorted(Comparator.comparingInt(Hexagon::getId))
+                .toList();
+        for (int i = 0; i < hexes.size() && i < fields.length; i++) {
+            Hexagon hex = hexes.get(i);
+            hex.setField(fields[i]);
+            hex.setDots(dots[i]);
+            hexagonService.create(hex);
+        }
+    }
+
+    private List<Node> plannedCepRoute() {
+        Map<Integer, List<Edge>> graph = edgesByNode();
+        List<Node> nodes = nodeService.getAll().stream()
+                .sorted(Comparator.comparingInt(Node::getId))
+                .toList();
+        for (Node start : nodes) {
+            List<Integer> path = new ArrayList<>();
+            if (findSimplePath(start.getId(), CEP_ROUTE_NODE_COUNT, graph, new HashSet<>(), path)) {
+                Map<Integer, Node> byId = nodesById();
+                return path.stream().map(byId::get).toList();
+            }
+        }
+        return List.of();
+    }
+
+    private boolean findSimplePath(int nodeId, int targetSize, Map<Integer, List<Edge>> graph,
+                                   Set<Integer> used, List<Integer> path) {
+        used.add(nodeId);
+        path.add(nodeId);
+        if (path.size() == targetSize) {
+            return true;
+        }
+        List<Edge> edges = new ArrayList<>(graph.getOrDefault(nodeId, List.of()));
+        edges.sort(Comparator.comparingInt(Edge::getId));
+        for (Edge edge : edges) {
+            int next = otherNodeId(edge, nodeId);
+            if (!used.contains(next) && findSimplePath(next, targetSize, graph, used, path)) {
+                return true;
+            }
+        }
+        path.remove(path.size() - 1);
+        used.remove(nodeId);
+        return false;
+    }
+
+    private void createScenarioGoalPair(List<Node> route) {
+        SynergyPair pair = new SynergyPair();
+        pair.setNode1(route.get(0));
+        pair.setNode2(route.get(route.size() - 1));
+        pair.setDistance(route.size() - 1);
+        pair.setScore(200);
+        pair.setRouteNodes(new ArrayList<>(route));
+        pair.setCheckPoints(route.stream().skip(3).limit(3).toList());
+        synergyPairService.create(pair);
+    }
+
+    private void placeProductionSettlements(Player playerOne, Player playerTwo, Player me) {
+        Set<Integer> reserved = new HashSet<>(plannedRouteNodeIds(me.getId()));
+        Node playerOneTown = bestRoadProductionNode(reserved);
+        placeSettlement(playerOneTown, playerOne, Settlement.TOWN);
+        reserved.add(playerOneTown.getId());
+
+        Node playerOneVillage = bestRoadProductionNode(reserved);
+        placeSettlement(playerOneVillage, playerOne, Settlement.VILLAGE);
+        reserved.add(playerOneVillage.getId());
+
+        Node playerTwoVillage = bestRoadProductionNode(reserved);
+        placeSettlement(playerTwoVillage, playerTwo, Settlement.VILLAGE);
+    }
+
+    private void forcePlayerOneNode12Village(Player playerOne) {
+        Node node12 = nodesById().get(12);
+        if (node12 != null && node12.getOwner() != null
+                && node12.getOwner().getId() == playerOne.getId()) {
+            placeSettlement(node12, playerOne, Settlement.VILLAGE);
+        }
+    }
+
+    private Node bestRoadProductionNode(Set<Integer> reserved) {
+        return nodeService.getAll().stream()
+                .filter(node -> !reserved.contains(node.getId()))
+                .filter(node -> node.getSettlement() == null)
+                .max(Comparator
+                        .comparingDouble((Node node) -> roadResourceProduction(node) + settlementSpreadBonus(node, reserved))
+                        .thenComparingInt(Node::getId))
+                .orElseThrow(() -> new GameActionException(HttpStatus.CONFLICT, "No free node for CEP scenario."));
+    }
+
+    private double roadResourceProduction(Node node) {
+        double score = 0.0;
+        for (Hexagon hex : node.getAdjacentHexagons()) {
+            if (hex.getField() == Resource.WOOD || hex.getField() == Resource.BRICK) {
+                score += diceWeight(hex.getDots());
+            }
+        }
+        return score;
+    }
+
+    private double settlementSpreadBonus(Node node, Set<Integer> reserved) {
+        return reserved.contains(node.getId()) ? -100.0 : 0.0;
+    }
+
+    private List<Node> approachPath(List<Node> route, int targetIndex, int distanceToRoute) {
+        Set<Integer> routeIds = route.stream().map(Node::getId).collect(java.util.stream.Collectors.toSet());
+        Node target = route.get(Math.min(targetIndex, route.size() - 1));
+        List<Integer> path = new ArrayList<>();
+        if (findApproachPath(target.getId(), distanceToRoute + 1, routeIds, new HashSet<>(), path)) {
+            Collections.reverse(path);
+            Map<Integer, Node> nodes = nodesById();
+            return path.stream().map(nodes::get).toList();
+        }
+        return List.of();
+    }
+
+    private boolean findApproachPath(int nodeId, int remainingEdges, Set<Integer> routeIds,
+                                     Set<Integer> used, List<Integer> reversePath) {
+        used.add(nodeId);
+        reversePath.add(nodeId);
+        if (remainingEdges == 0) {
+            return true;
+        }
+        List<Edge> edges = new ArrayList<>(edgesByNode().getOrDefault(nodeId, List.of()));
+        edges.sort(Comparator.comparingInt(Edge::getId).reversed());
+        for (Edge edge : edges) {
+            int next = otherNodeId(edge, nodeId);
+            if (used.contains(next) || routeIds.contains(next)) {
+                continue;
+            }
+            if (findApproachPath(next, remainingEdges - 1, routeIds, used, reversePath)) {
+                return true;
+            }
+        }
+        reversePath.remove(reversePath.size() - 1);
+        used.remove(nodeId);
+        return false;
+    }
+
+    private Edge edgeBetween(Node first, Node second) {
+        if (first == null || second == null) {
+            return null;
+        }
+        return edgeService.getAll().stream()
+                .filter(edge -> (edge.getNode1().getId() == first.getId() && edge.getNode2().getId() == second.getId())
+                        || (edge.getNode1().getId() == second.getId() && edge.getNode2().getId() == first.getId()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private void addResources(Player player, Map<Resource, Integer> resources) {
+        for (Map.Entry<Resource, Integer> entry : resources.entrySet()) {
+            player.addResource(entry.getKey(), entry.getValue());
+        }
+        playerService.create(player);
+    }
+
+    private void setupPlayerOneNode34To23Path(Player playerOne) {
+        cepPlayerOneNode34To23Path = shortestNodePath(34, 23);
+        cepPlayerOneNode23RoadTurn = null;
+        if (cepPlayerOneNode34To23Path.size() < 2) {
+            return;
+        }
+
+        Map<Integer, Node> nodes = nodesById();
+        Node anchor = nodes.get(34);
+        if (anchor != null && anchor.getSettlement() == null) {
+            placeSettlement(anchor, playerOne, Settlement.TOWN);
+        }
+
+        for (int i = 0; i + 1 < cepPlayerOneNode34To23Path.size(); i++) {
+            int first = cepPlayerOneNode34To23Path.get(i);
+            int second = cepPlayerOneNode34To23Path.get(i + 1);
+            if (first == 23 || second == 23) {
+                continue;
+            }
+            Edge edge = edgeBetween(nodes.get(first), nodes.get(second));
+            if (edge != null && edge.getOwner() == null) {
+                placeRoad(edge, playerOne);
+            }
+        }
+    }
+
+    private void scriptedPlayerOneNode23Road(Player playerOne) {
+        if (cepPlayerOneNode34To23Path.size() < 2) {
+            turnMessage = "Player 1 cannot find the prepared node 34 to node 23 route.";
+            return;
+        }
+        Map<Integer, Node> nodes = nodesById();
+        for (int i = 0; i + 1 < cepPlayerOneNode34To23Path.size(); i++) {
+            int first = cepPlayerOneNode34To23Path.get(i);
+            int second = cepPlayerOneNode34To23Path.get(i + 1);
+            if (first != 23 && second != 23) {
+                continue;
+            }
+            Edge edge = edgeBetween(nodes.get(first), nodes.get(second));
+            if (edge == null || edge.getOwner() != null) {
+                return;
+            }
+            int beforeDistance = routeDistanceFor(playerOne.getId());
+            placeRoad(edge, playerOne);
+            recordRoadBuild(playerOne.getId(), edge.getId(), beforeDistance);
+            cepPlayerOneNode23RoadTurn = turnSequence;
+            return;
+        }
+    }
+
+    private List<Integer> shortestNodePath(int startNodeId, int endNodeId) {
+        Map<Integer, List<Edge>> graph = edgesByNode();
+        ArrayDeque<Integer> frontier = new ArrayDeque<>();
+        Map<Integer, Integer> previous = new HashMap<>();
+        Set<Integer> visited = new HashSet<>();
+        frontier.add(startNodeId);
+        visited.add(startNodeId);
+
+        while (!frontier.isEmpty()) {
+            int current = frontier.remove();
+            if (current == endNodeId) {
+                break;
+            }
+            List<Edge> edges = new ArrayList<>(graph.getOrDefault(current, List.of()));
+            edges.sort(Comparator.comparingInt(Edge::getId));
+            for (Edge edge : edges) {
+                int next = otherNodeId(edge, current);
+                if (!visited.add(next)) {
+                    continue;
+                }
+                previous.put(next, current);
+                frontier.add(next);
+            }
+        }
+
+        if (!visited.contains(endNodeId)) {
+            return List.of();
+        }
+        List<Integer> path = new ArrayList<>();
+        int current = endNodeId;
+        path.add(current);
+        while (current != startNodeId) {
+            current = previous.get(current);
+            path.add(current);
+        }
+        Collections.reverse(path);
+        return path;
+    }
+
+    private void scriptedOpponentRoad(Player player, List<Node> path, int edgeIndex, String fallbackMessage) {
+        if (path.size() <= edgeIndex + 1) {
+            turnMessage = fallbackMessage;
+            return;
+        }
+        Edge edge = edgeBetween(path.get(edgeIndex), path.get(edgeIndex + 1));
+        if (edge == null || edge.getOwner() != null) {
+            turnMessage = fallbackMessage;
+            return;
+        }
+        int beforeDistance = routeDistanceFor(player.getId());
+        placeRoad(edge, player);
+        recordRoadBuild(player.getId(), edge.getId(), beforeDistance);
+    }
+
+    private void scriptedEconomyRoad(Player player, Set<Integer> avoidNodeIds, String message) {
+        Set<Integer> network = networkNodeIds(player.getId());
+        for (Edge edge : edgeService.getAll().stream().sorted(Comparator.comparingInt(Edge::getId)).toList()) {
+            if (edge.getOwner() != null) {
+                continue;
+            }
+            int first = edge.getNode1().getId();
+            int second = edge.getNode2().getId();
+            if (!network.contains(first) && !network.contains(second)) {
+                continue;
+            }
+            if (avoidNodeIds.contains(first) || avoidNodeIds.contains(second)) {
+                continue;
+            }
+            placeRoad(edge, player);
+            break;
+        }
+        turnMessage = message;
+    }
+
+    private void scriptedMyRoad(Player me, List<Node> route, int edgeIndex, String message) {
+        if (route.size() <= edgeIndex + 1) {
+            turnMessage = message;
+            return;
+        }
+        Edge edge = edgeBetween(route.get(edgeIndex), route.get(edgeIndex + 1));
+        if (edge != null && edge.getOwner() == null) {
+            placeRoad(edge, me);
+            placementAdviceService.updatePersistedRoutes(me.getId());
+        }
+        turnMessage = message;
     }
 
     private boolean isPlaceable(Node node, List<Edge> edges) {
@@ -609,6 +1125,10 @@ public class GameService {
         turnSequence = 0;
         roadBuildEvents.clear();
         tradeSignals.clear();
+        cepScriptMode = false;
+        cepScriptStep = 0;
+        cepPlayerOneNode34To23Path = List.of();
+        cepPlayerOneNode23RoadTurn = null;
         scoringService.reset();
     }
 
@@ -622,7 +1142,7 @@ public class GameService {
 
     private BoardStateDto buildState() {
         List<AdviceDto> advices = List.of();
-        if (currentPlayerId != null && isUserControlledCurrentPlayer()) {
+        if (!cepScriptMode && currentPlayerId != null && isUserControlledCurrentPlayer()) {
             advices = placementAdviceService.openingAdvice(currentPlayerId);
         }
 
@@ -700,10 +1220,147 @@ public class GameService {
                         maxOpponentRoadCards(player.getId(), players)).stream()
                 .map(goalAdvice -> new GoalAdviceDto(goalAdvice, tradeProposal(goalAdvice.getTitle(), player, players)))
                 .toList());
-        addConcreteTradeSuggestions(advice, player, players);
+        enrichCepAdvice(advice, player, players);
+        if (!cepScriptMode) {
+            addConcreteTradeSuggestions(advice, player, players);
+        }
         return advice.stream()
                 .limit(10)
                 .toList();
+    }
+
+    private void enrichCepAdvice(List<GoalAdviceDto> advice, Player me, List<Player> players) {
+        for (int i = 0; i < advice.size(); i++) {
+            GoalAdviceDto item = advice.get(i);
+            if (!isCepAdvice(item) || item.getNodeId() == null) {
+                continue;
+            }
+            Player opponent = players.stream()
+                    .filter(candidate -> candidate.getId() == item.getNodeId())
+                    .findFirst()
+                    .orElse(null);
+            if (opponent == null) {
+                continue;
+            }
+            String description = item.getDescription() + "\n\nSliding window - previous 3 steps:\n"
+                    + cepApproachLine(opponent.getId()) + "\n"
+                    + cepNode23Line(opponent.getId()) + "\n"
+                    + cepResourcesLine("Opponent", opponent) + "\n"
+                    + cepResourcesLine("You", me) + "\n"
+                    + cepTradeLine(opponent.getId()) + "\n"
+                    + cepRaceConclusion(me, opponent);
+            advice.set(i, new GoalAdviceDto(item.getRank(), item.getTitle(), description, item.getNodeId(),
+                    item.isTradeAction(), item.getTradeProposal()));
+        }
+    }
+
+    private boolean isCepAdvice(GoalAdviceDto advice) {
+        return "Blockade threat".equals(advice.getTitle())
+                || "Watch blockade route".equals(advice.getTitle());
+    }
+
+    private String cepApproachLine(int opponentId) {
+        List<RoadBuildEvent> recent = recentRoadEvents(opponentId);
+        if (recent.isEmpty()) {
+            return "- Approach: no road movement in the current 3-step window.";
+        }
+        int movedCloser = recent.stream()
+                .mapToInt(event -> Math.max(0, event.getPreviousDistanceToRoute() - event.getDistanceToRoute()))
+                .sum();
+        RoadBuildEvent latest = recent.get(recent.size() - 1);
+        return "- Approach: moved " + movedCloser + " road(s) closer from " + latest.getDirection()
+                + "; now " + latest.getDistanceToRoute() + " road(s) from your planned route.";
+    }
+
+    private String cepNode23Line(int opponentId) {
+        if (playerIds.isEmpty() || opponentId != playerIds.get(0) || cepPlayerOneNode34To23Path.isEmpty()) {
+            return "- Node 23 route: no prepared 34-23 pressure route for this opponent.";
+        }
+        String path = cepPlayerOneNode34To23Path.stream()
+                .map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining(" -> "));
+        if (cepPlayerOneNode23RoadTurn == null) {
+            return "- Node 23 route: Player 1 has prepared roads on path " + path
+                    + ", but the road out of node 23 is still not built.";
+        }
+        int age = Math.max(0, turnSequence - cepPlayerOneNode23RoadTurn);
+        return "- Node 23 route: Player 1 prepared path " + path
+                + "; the missing road out of node 23 was built " + age
+                + " step(s) ago inside the sliding window.";
+    }
+
+    private List<RoadBuildEvent> recentRoadEvents(int opponentId) {
+        int oldestTurn = cepWindowOldestTurn();
+        return roadBuildEvents.stream()
+                .filter(event -> event.getPlayerId() == opponentId)
+                .filter(event -> event.getTurn() >= oldestTurn)
+                .sorted(Comparator.comparingInt(RoadBuildEvent::getTurn))
+                .toList();
+    }
+
+    private String cepResourcesLine(String label, Player player) {
+        int wood = resourceCount(player, Resource.WOOD);
+        int brick = resourceCount(player, Resource.BRICK);
+        int grain = resourceCount(player, Resource.GRAIN);
+        int wool = resourceCount(player, Resource.WOOL);
+        int ore = resourceCount(player, Resource.ORE);
+        int roadCards = Math.min(wood, brick);
+        return "- " + label + " resources: Wood " + wood + ", Brick " + brick + ", Grain " + grain
+                + ", Wool " + wool + ", Ore " + ore + " (road-ready pairs: " + roadCards + ").";
+    }
+
+    private String cepTradeLine(int opponentId) {
+        int oldestTurn = cepTradeWindowOldestTurn();
+        List<TradeSignal> recent = tradeSignals.stream()
+                .filter(signal -> signal.getPlayerId() == opponentId)
+                .filter(signal -> signal.getTurn() >= oldestTurn)
+                .sorted(Comparator.comparingInt(TradeSignal::getTurn))
+                .toList();
+        if (recent.isEmpty()) {
+            return "- Trade: no trade request detected in this CEP window.";
+        }
+        return "- Trade: " + recent.stream()
+                .map(signal -> tradeSignalText(signal))
+                .collect(java.util.stream.Collectors.joining("; ")) + ".";
+    }
+
+    private String tradeSignalText(TradeSignal signal) {
+        String outcome = signal.isSuccessful() ? "succeeded" : "failed";
+        if (signal.getOfferedResource() != null) {
+            return "offered " + signal.getOfferedResource().getDisplayName()
+                    + " for your " + signal.getResource().getDisplayName()
+                    + " and it " + outcome;
+        }
+        return "asked for " + signal.getResource().getDisplayName() + " and it " + outcome;
+    }
+
+    private String cepRaceConclusion(Player me, Player opponent) {
+        int myWood = resourceCount(me, Resource.WOOD);
+        int myBrick = resourceCount(me, Resource.BRICK);
+        int opponentRoadCards = Math.min(resourceCount(opponent, Resource.WOOD), resourceCount(opponent, Resource.BRICK));
+        int myRoadCards = Math.min(myWood, myBrick);
+        int missingWood = Math.max(0, 1 - myWood);
+        int missingBrick = Math.max(0, 1 - myBrick);
+        int opponentDistance = recentRoadEvents(opponent.getId()).stream()
+                .reduce((first, second) -> second)
+                .map(RoadBuildEvent::getDistanceToRoute)
+                .orElse(routeDistanceFor(opponent.getId()));
+        String missing = missingWood == 0 && missingBrick == 0
+                ? "you are not missing road resources"
+                : "you are missing " + missingWood + " Wood and " + missingBrick + " Brick";
+
+        String winner;
+        if (myRoadCards > 0 && (opponentDistance > 0 || opponentRoadCards <= myRoadCards)) {
+            winner = "you have the better immediate position because you can build a road now";
+        } else if (myRoadCards == 0 && opponentRoadCards > 0) {
+            winner = "the opponent has the better position; start trading for Wood/Brick";
+        } else if (opponentRoadCards > myRoadCards) {
+            winner = "the opponent has better road-resource momentum";
+        } else {
+            winner = "the race is close, so prioritize the critical road before spending elsewhere";
+        }
+        return "- Conclusion: " + winner + "; " + missing + ". Opponent is "
+                + opponentDistance + " road(s) away with " + opponentRoadCards + " road-ready pair(s).";
     }
 
     private void addConcreteTradeSuggestions(List<GoalAdviceDto> advice, Player player, List<Player> players) {
@@ -756,13 +1413,66 @@ public class GameService {
         if (mePlayerId == 0 || playerId == mePlayerId) {
             return;
         }
-        int currentDistance = routeDistanceFor(playerId);
-        if (currentDistance >= UNREACHABLE_ROUTE_DISTANCE && previousDistance >= UNREACHABLE_ROUTE_DISTANCE) {
+        Edge builtEdge = edgeService.getAll().stream()
+                .filter(edge -> edge.getId() == edgeId)
+                .findFirst()
+                .orElse(null);
+        int currentDistance = branchDistanceAfterRoadBuild(playerId, mePlayerId, builtEdge);
+        int branchPreviousDistance = branchDistanceBeforeRoadBuild(playerId, mePlayerId, builtEdge, edgeId, currentDistance);
+        if (currentDistance >= UNREACHABLE_ROUTE_DISTANCE && branchPreviousDistance >= UNREACHABLE_ROUTE_DISTANCE) {
             return;
         }
         roadBuildEvents.add(new RoadBuildEvent(playerId, mePlayerId, edgeId, turnSequence,
-                currentDistance, previousDistance, routeDirectionFor(playerId)));
+                currentDistance, branchPreviousDistance, routeDirectionFor(playerId)));
         pruneCepWindow();
+    }
+
+    private int branchDistanceAfterRoadBuild(int playerId, int mePlayerId, Edge builtEdge) {
+        if (builtEdge == null) {
+            return routeDistanceFor(playerId);
+        }
+        int firstDistance = distanceFromNodeToPlannedRoute(builtEdge.getNode1().getId(), playerId, mePlayerId);
+        int secondDistance = distanceFromNodeToPlannedRoute(builtEdge.getNode2().getId(), playerId, mePlayerId);
+        return Math.min(firstDistance, secondDistance);
+    }
+
+    private int branchDistanceBeforeRoadBuild(int playerId, int mePlayerId, Edge builtEdge,
+                                              int builtEdgeId, int currentDistance) {
+        if (builtEdge == null) {
+            return routeDistanceFor(playerId);
+        }
+        List<Integer> oldEndpointDistances = new ArrayList<>();
+        boolean firstWasNetwork = wasNetworkNodeBeforeRoad(playerId, builtEdge.getNode1(), builtEdgeId);
+        boolean secondWasNetwork = wasNetworkNodeBeforeRoad(playerId, builtEdge.getNode2(), builtEdgeId);
+        if (firstWasNetwork) {
+            oldEndpointDistances.add(distanceFromNodeToPlannedRoute(builtEdge.getNode1().getId(), playerId, mePlayerId, builtEdgeId));
+        }
+        if (secondWasNetwork) {
+            oldEndpointDistances.add(distanceFromNodeToPlannedRoute(builtEdge.getNode2().getId(), playerId, mePlayerId, builtEdgeId));
+        }
+        if (oldEndpointDistances.isEmpty()) {
+            return routeDistanceFor(playerId);
+        }
+        int previousBranchDistance = oldEndpointDistances.stream()
+                .mapToInt(Integer::intValue)
+                .min()
+                .orElse(UNREACHABLE_ROUTE_DISTANCE);
+        if (currentDistance < 3 && previousBranchDistance <= currentDistance) {
+            return currentDistance + 1;
+        }
+        return Math.max(previousBranchDistance, currentDistance);
+    }
+
+    private boolean wasNetworkNodeBeforeRoad(int playerId, Node node, int builtEdgeId) {
+        if (node.getOwner() != null && node.getOwner().getId() == playerId && node.getSettlement() != null) {
+            return true;
+        }
+        for (Edge edge : edgesByNode().getOrDefault(node.getId(), List.of())) {
+            if (edge.getId() != builtEdgeId && edge.getOwner() != null && edge.getOwner().getId() == playerId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void recordTradeSignal(int playerId, Resource resource, boolean successful) {
@@ -776,9 +1486,21 @@ public class GameService {
     }
 
     private void pruneCepWindow() {
-        int oldestTurn = turnSequence - CEP_WINDOW_TURNS;
+        int oldestTurn = cepWindowOldestTurn();
         roadBuildEvents.removeIf(event -> event.getTurn() < oldestTurn);
-        tradeSignals.removeIf(event -> event.getTurn() < oldestTurn);
+        int oldestTradeTurn = cepTradeWindowOldestTurn();
+        tradeSignals.removeIf(event -> event.getTurn() < oldestTradeTurn);
+    }
+
+    private int cepWindowOldestTurn() {
+        return turnSequence - CEP_WINDOW_TURNS - 1;
+    }
+
+    private int cepTradeWindowOldestTurn() {
+        if (cepScriptMode) {
+            return turnSequence - (CEP_WINDOW_TURNS * 2) - 1;
+        }
+        return cepWindowOldestTurn();
     }
 
     private int roadsMissingForPlannedRoute(int playerId) {
@@ -844,6 +1566,51 @@ public class GameService {
                     continue;
                 }
                 int next = otherNodeId(edge, current);
+                if (distance.containsKey(next)) {
+                    continue;
+                }
+                distance.put(next, currentDistance + 1);
+                frontier.add(next);
+            }
+        }
+        return UNREACHABLE_ROUTE_DISTANCE;
+    }
+
+    private int distanceFromNodeToPlannedRoute(int startNodeId, int playerId, int mePlayerId) {
+        return distanceFromNodeToPlannedRoute(startNodeId, playerId, mePlayerId, null);
+    }
+
+    private int distanceFromNodeToPlannedRoute(int startNodeId, int playerId, int mePlayerId, Integer excludedEdgeId) {
+        Set<Integer> targetRoute = plannedRouteNodeIds(mePlayerId);
+        if (targetRoute.isEmpty()) {
+            return UNREACHABLE_ROUTE_DISTANCE;
+        }
+        if (targetRoute.contains(startNodeId)) {
+            return 0;
+        }
+
+        Map<Integer, List<Edge>> edgesByNode = edgesByNode();
+        ArrayDeque<Integer> frontier = new ArrayDeque<>();
+        Map<Integer, Integer> distance = new HashMap<>();
+        frontier.add(startNodeId);
+        distance.put(startNodeId, 0);
+        while (!frontier.isEmpty()) {
+            int current = frontier.remove();
+            int currentDistance = distance.get(current);
+            if (currentDistance >= 6) {
+                continue;
+            }
+            for (Edge edge : edgesByNode.getOrDefault(current, List.of())) {
+                if (excludedEdgeId != null && edge.getId() == excludedEdgeId) {
+                    continue;
+                }
+                if (edge.getOwner() != null && edge.getOwner().getId() != playerId) {
+                    continue;
+                }
+                int next = otherNodeId(edge, current);
+                if (targetRoute.contains(next)) {
+                    return currentDistance + 1;
+                }
                 if (distance.containsKey(next)) {
                     continue;
                 }
@@ -1246,7 +2013,7 @@ public class GameService {
     }
 
     private BuildOptions buildOptions(List<Player> players) {
-        if (!isMainTurn() || !isUserControlledCurrentPlayer() || currentPlayerId == null) {
+        if (cepScriptMode || !isMainTurn() || !isUserControlledCurrentPlayer() || currentPlayerId == null) {
             return BuildOptions.empty();
         }
         return players.stream()

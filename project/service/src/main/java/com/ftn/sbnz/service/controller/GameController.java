@@ -31,6 +31,16 @@ public class GameController {
         return gameService.newGame(req == null || req.autoOpponents);
     }
 
+    @PostMapping("/cep-scenario")
+    public BoardStateDto cepScenario() {
+        return gameService.cepScenario();
+    }
+
+    @PostMapping("/cep-scenario/step")
+    public BoardStateDto cepScenarioStep() {
+        return gameService.cepScenarioStep();
+    }
+
     @PostMapping("/place")
     public ResponseEntity<?> place(@RequestBody PlaceRequest req) {
         try {

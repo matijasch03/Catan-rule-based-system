@@ -216,7 +216,7 @@ when
                              $opponentRoadCards : opponentRoadCards,
                              $myRoadCards : myRoadCards,
                              $score : score)
-    not GoalAdvice(title == "Blockade threat")
+    not GoalAdvice(title == "Blockade threat", nodeId == $playerId)
 then
     insert(new GoalAdvice(0, "Blockade threat",
             "CEP alarm: Player " + $playerId + " is approaching from " + $direction
@@ -224,7 +224,8 @@ then
             + ($previousDistance > $distance ? " and moved " + ($previousDistance - $distance) + " road(s) closer in the 3-turn window." : ".")
             + " You still need " + $myDistance + " road(s) for the plan. Road cards now: opponent "
             + $opponentRoadCards + ", you " + $myRoadCards + ". Threat score "
-            + Math.round($score) + ": build the contested road or trade for Wood/Brick immediately."));
+            + Math.round($score) + ": build the contested road or trade for Wood/Brick immediately.",
+            $playerId));
 end
 
 rule "CEP - Medium blockade threat advice"
@@ -238,11 +239,12 @@ when
                              $distance : distanceToRoute,
                              $myDistance : myDistanceToPlan,
                              $score : score)
-    not GoalAdvice(title == "Watch blockade route")
+    not GoalAdvice(title == "Watch blockade route", nodeId == $playerId)
 then
     insert(new GoalAdvice(2, "Watch blockade route",
             "CEP warning: Player " + $playerId + " is " + $distance
             + " road(s) from your planned longest-road route, from " + $direction
             + ". You need " + $myDistance + " road(s) for your plan. Threat score "
-            + Math.round($score) + ": you still have time, but prioritize Wood/Brick and the next road."));
+            + Math.round($score) + ": you still have time, but prioritize Wood/Brick and the next road.",
+            $playerId));
 end

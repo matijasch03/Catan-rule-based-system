@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Catan Board</title>
-    <link rel="stylesheet" href="style.css?v=20260711-node-score-tooltip" />
+    <link rel="stylesheet" href="style.css?v=20260715-hand-wrap-tune" />
 </head>
 <body>
     <header>
@@ -16,6 +16,8 @@
                 <label><input type="radio" name="opponents" value="me" /> I play them</label>
             </fieldset>
             <button id="newgame-btn" type="button">New Game</button>
+            <button id="cep-scenario-btn" type="button">CEP Scenario</button>
+            <button id="cep-toggle-btn" type="button" hidden>Pause</button>
             <button id="reload-btn" type="button">Reload</button>
         </div>
     </header>
@@ -75,6 +77,6 @@
         </aside>
     </main>
 
-    <script type="module" src="app.js?v=20260711-node-score-tooltip"></script>
+    <script type="module" src="app.js?v=20260715-hand-wrap-tune"></script>
 </body>
 </html>

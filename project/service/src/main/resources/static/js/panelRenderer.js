@@ -118,6 +118,14 @@ function renderDiceRolls() {
     sum.className = "dice-sum";
     sum.textContent = `= ${roll.sum}`;
     item.appendChild(sum);
+
+    const resourceSummary = roll.resourceSummary || [];
+    if (resourceSummary.length) {
+      const resources = document.createElement("span");
+      resources.className = "dice-resources";
+      resources.textContent = resourceSummary.join(" | ");
+      item.appendChild(resources);
+    }
     diceRollsEl.appendChild(item);
   }
 }
@@ -196,9 +204,7 @@ function renderGoalAdvice(tradeAction) {
     title.textContent = advice.title;
     item.appendChild(title);
 
-    const description = document.createElement("p");
-    description.textContent = advice.description;
-    item.appendChild(description);
+    renderGoalDescription(item, advice.description || "");
 
     if (advice.tradeAction) {
       const button = document.createElement("button");
@@ -214,6 +220,48 @@ function renderGoalAdvice(tradeAction) {
     }
     goalListEl.appendChild(item);
   }
+}
+
+function renderGoalDescription(item, descriptionText) {
+  const marker = "Sliding window - previous 3 steps:";
+  const markerIndex = descriptionText.indexOf(marker);
+  if (markerIndex < 0) {
+    const description = document.createElement("p");
+    description.textContent = descriptionText;
+    item.appendChild(description);
+    return;
+  }
+
+  const intro = descriptionText.slice(0, markerIndex).trim();
+  if (intro) {
+    const description = document.createElement("p");
+    description.textContent = intro;
+    item.appendChild(description);
+  }
+
+  const analysis = document.createElement("div");
+  analysis.className = "goal-analysis";
+
+  const heading = document.createElement("span");
+  heading.className = "goal-analysis-title";
+  heading.textContent = marker;
+  analysis.appendChild(heading);
+
+  const list = document.createElement("ul");
+  const bullets = descriptionText
+    .slice(markerIndex + marker.length)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^-+\s*/, ""));
+
+  for (const bullet of bullets) {
+    const li = document.createElement("li");
+    li.textContent = bullet;
+    list.appendChild(li);
+  }
+  analysis.appendChild(list);
+  item.appendChild(analysis);
 }
 
 function renderBuildActions(buildAction) {

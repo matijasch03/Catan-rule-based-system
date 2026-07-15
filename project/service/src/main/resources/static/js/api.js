@@ -19,6 +19,14 @@ export function newGame(autoOpponents) {
   });
 }
 
+export function cepScenario() {
+  return getJson("/api/game/cep-scenario", { method: "POST" });
+}
+
+export function cepScenarioStep() {
+  return getJson("/api/game/cep-scenario/step", { method: "POST" });
+}
+
 export function placeOpeningRoad(nodeId, edgeId) {
   return getJson("/api/game/place", {
     method: "POST",

@@ -1,5 +1,7 @@
 import {
   build,
+  cepScenario,
+  cepScenarioStep,
   endTurn,
   loadGameState,
   loadHexes,
@@ -9,8 +11,8 @@ import {
   reshuffleBoard,
 } from "./js/api.js";
 import { renderBoard } from "./js/boardRenderer.js?v=20260711-node-score-tooltip";
-import { endTurnBtn, newGameBtn, reloadBtn, selectedOpponentsMode } from "./js/dom.js";
-import { renderHand, renderPanel } from "./js/panelRenderer.js?v=20260709-trade-flow";
+import { cepScenarioBtn, cepToggleBtn, endTurnBtn, newGameBtn, reloadBtn, selectedOpponentsMode } from "./js/dom.js";
+import { renderHand, renderPanel } from "./js/panelRenderer.js?v=20260715-advice-analysis";
 import { state } from "./js/state.js";
 import { describePhase, setStatus } from "./js/status.js?v=20260707-turn-steps";
 
@@ -20,6 +22,9 @@ const actions = {
   buildOnEdge,
   buildOnNode,
 };
+
+let cepTimer = null;
+let cepPaused = false;
 
 async function refreshAll(hexesPromise) {
   const [hexes, gameState] = await Promise.all([
@@ -42,6 +47,8 @@ function draw(hexes) {
 function busy(on) {
   reloadBtn.disabled = on;
   newGameBtn.disabled = on;
+  cepScenarioBtn.disabled = on;
+  cepToggleBtn.disabled = on;
   endTurnBtn.disabled = on;
 }
 
@@ -125,6 +132,7 @@ async function tradeAction(trade) {
 
 newGameBtn.addEventListener("click", () =>
   run(async () => {
+    stopCepAutoplay();
     state.autoOpponents = selectedOpponentsMode();
     const hexes = await loadHexes();
     state.game = await newGame(state.autoOpponents);
@@ -137,10 +145,42 @@ newGameBtn.addEventListener("click", () =>
 
 reloadBtn.addEventListener("click", () =>
   run(async () => {
+    stopCepAutoplay();
     const hexes = await reshuffleBoard();
     await refreshAll(Promise.resolve(hexes));
   }, "Reshuffling\u2026")
 );
+
+cepScenarioBtn.addEventListener("click", () =>
+  run(async () => {
+    stopCepAutoplay();
+    state.autoOpponents = true;
+    state.game = await cepScenario();
+    state.selectedNodeId = null;
+    state.buildMode = null;
+    const hexes = await loadHexes();
+    draw(hexes);
+    setStatus(state.game.turnMessage || "CEP script running...");
+    startCepAutoplay();
+  }, "Loading CEP scenario...")
+);
+
+cepToggleBtn.addEventListener("click", () => {
+  if (!cepTimer && cepPaused) {
+    cepPaused = false;
+    cepToggleBtn.textContent = "Pause";
+    startCepAutoplay();
+    setStatus(state.game?.turnMessage || "CEP script running...");
+    return;
+  }
+  if (cepTimer) {
+    clearInterval(cepTimer);
+    cepTimer = null;
+    cepPaused = true;
+    cepToggleBtn.textContent = "Resume";
+    setStatus("CEP script paused.");
+  }
+});
 
 endTurnBtn.addEventListener("click", () =>
   run(async () => {
@@ -153,3 +193,35 @@ endTurnBtn.addEventListener("click", () =>
 );
 
 run(() => refreshAll(), "Loading board\u2026");
+
+function startCepAutoplay() {
+  cepToggleBtn.hidden = false;
+  cepToggleBtn.textContent = "Pause";
+  if (cepTimer) clearInterval(cepTimer);
+  cepTimer = setInterval(playCepStep, 1800);
+}
+
+function stopCepAutoplay() {
+  if (cepTimer) clearInterval(cepTimer);
+  cepTimer = null;
+  cepPaused = false;
+  cepToggleBtn.hidden = true;
+  cepToggleBtn.textContent = "Pause";
+}
+
+async function playCepStep() {
+  if (cepPaused) return;
+  try {
+    state.game = await cepScenarioStep();
+    state.selectedNodeId = null;
+    state.buildMode = null;
+    draw(state.lastHexes);
+    setStatus(state.game.turnMessage || "CEP script running...");
+    if (state.game.phase === "CEP_DONE") {
+      stopCepAutoplay();
+    }
+  } catch (err) {
+    stopCepAutoplay();
+    setStatus(`Error: ${err.message}`);
+  }
+}

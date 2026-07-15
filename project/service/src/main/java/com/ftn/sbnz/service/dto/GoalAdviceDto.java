@@ -28,6 +28,16 @@ public class GoalAdviceDto {
         this.tradeProposal = tradeProposal;
     }
 
+    public GoalAdviceDto(int rank, String title, String description, Integer nodeId,
+                         boolean tradeAction, TradeProposalDto tradeProposal) {
+        this.rank = rank;
+        this.title = title;
+        this.description = description;
+        this.nodeId = nodeId;
+        this.tradeAction = tradeAction;
+        this.tradeProposal = tradeProposal;
+    }
+
     public int getRank() { return rank; }
     public String getTitle() { return title; }
     public String getDescription() { return description; }
