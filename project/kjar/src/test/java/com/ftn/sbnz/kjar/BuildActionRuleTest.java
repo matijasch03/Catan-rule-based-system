@@ -53,7 +53,7 @@ class BuildActionRuleTest {
     }
 
     @Test
-    void backwardGoalSuggestsTradeWhenTownResourcesAreMissing() {
+    void goalSuggestsTradeWhenTownResourcesAreMissing() {
         BuildActionFact action = new BuildActionFact(1);
         action.setHasVillageToUpgrade(true);
         action.setHasOpenRoadEdge(true);

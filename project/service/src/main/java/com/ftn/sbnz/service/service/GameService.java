@@ -1225,6 +1225,8 @@ public class GameService {
             addConcreteTradeSuggestions(advice, player, players);
         }
         return advice.stream()
+                .sorted(Comparator.comparingInt(GoalAdviceDto::getRank)
+                        .thenComparing(GoalAdviceDto::getTitle))
                 .limit(10)
                 .toList();
     }
@@ -1365,17 +1367,17 @@ public class GameService {
 
     private void addConcreteTradeSuggestions(List<GoalAdviceDto> advice, Player player, List<Player> players) {
         BuildActionFact build = buildActionService.evaluate(player);
-        if (build.isHasVillageToUpgrade() && !build.isCanBuildTown()) {
-            addMissingResourceTrades(advice, player, players, "town",
-                    Map.of(Resource.ORE, 3, Resource.GRAIN, 2));
+        if (!build.isCanBuildRoad()) {
+            addMissingResourceTrades(advice, player, players, "road",
+                    Map.of(Resource.WOOD, 1, Resource.BRICK, 1));
         }
-        if (build.isHasLegalVillageNode() && !build.isCanBuildVillage()) {
+        if (!build.isCanBuildVillage()) {
             addMissingResourceTrades(advice, player, players, "village",
                     Map.of(Resource.WOOD, 1, Resource.BRICK, 1, Resource.GRAIN, 1, Resource.WOOL, 1));
         }
-        if (build.isHasOpenRoadEdge() && !build.isCanBuildRoad()) {
-            addMissingResourceTrades(advice, player, players, "road",
-                    Map.of(Resource.WOOD, 1, Resource.BRICK, 1));
+        if (build.isHasVillageToUpgrade() && !build.isCanBuildTown()) {
+            addMissingResourceTrades(advice, player, players, "town",
+                    Map.of(Resource.ORE, 3, Resource.GRAIN, 2));
         }
     }
 
@@ -2002,10 +2004,18 @@ public class GameService {
     }
 
     private Resource resourceWithAtLeast(Player player, int amount, Resource except) {
+        Map<Resource, Integer> protectedCosts = new LinkedHashMap<>();
+        protectedCosts.put(Resource.WOOD, 1);
+        protectedCosts.put(Resource.BRICK, 1);
+        protectedCosts.put(Resource.GRAIN, 1);
+        protectedCosts.put(Resource.WOOL, 1);
         return List.of(Resource.WOOL, Resource.WOOD, Resource.BRICK, Resource.GRAIN, Resource.ORE).stream()
                 .filter(resource -> resource != except)
                 .filter(resource -> resourceCount(player, resource) >= amount)
-                .findFirst()
+                .max(Comparator
+                        .comparingInt((Resource resource) ->
+                                resourceCount(player, resource) - protectedCosts.getOrDefault(resource, 0))
+                        .thenComparingInt(resource -> resourceCount(player, resource)))
                 .orElse(null);
     }
 
