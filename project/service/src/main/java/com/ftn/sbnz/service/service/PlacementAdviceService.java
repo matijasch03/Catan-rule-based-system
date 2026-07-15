@@ -66,8 +66,12 @@ public class PlacementAdviceService {
         }
 
         boolean openingPlacement = ownedSettlements(mePlayerId, nodes).isEmpty();
+        List<SynergyPair> persistedRoutes = openingPlacement
+                ? List.of()
+                : persistedAdviceRoutes(mePlayerId);
         if (!openingPlacement) {
             updatePersistedRoutes(mePlayerId);
+            persistedRoutes = persistedAdviceRoutes(mePlayerId);
         }
 
         KieSession session = kieContainer.newKieSession("boardScoreSession");
@@ -90,15 +94,13 @@ public class PlacementAdviceService {
 
             List<SynergyPair> ranked = openingPlacement
                     ? fallbackOpeningSynergyPairs(nodes, edges, mePlayerId)
-                    : actualSettlementSynergyPairs(mePlayerId, nodes, edges).stream()
-                            .sorted(pairComparator())
-                            .limit(2)
-                            .toList();
+                    : stableRouteAdvice(mePlayerId, persistedRoutes,
+                            actualSettlementSynergyPairs(mePlayerId, nodes, edges), nodes, edges);
 
             if (openingPlacement) {
-                return saveAdvice(me, ranked, nodeById, true);
+                return saveAdvice(me, ranked, nodeById, true, true);
             }
-            return saveAdvice(me, ranked, nodeById, false);
+            return saveAdvice(me, ranked, nodeById, false, false);
         } finally {
             session.dispose();
         }
@@ -106,30 +108,35 @@ public class PlacementAdviceService {
 
     @Transactional
     public void updatePersistedRoutes(int playerId) {
-        List<Edge> edges = edgeService.getAll();
         for (SynergyPair pair : synergyPairService.getAll()) {
             if (!belongsToPlayerAdvice(pair, playerId)) {
                 continue;
             }
-            List<Node> route = new ArrayList<>(pair.getRouteNodes());
-            boolean changed = trimOwnedSegments(route, edges, playerId);
-            if (changed) {
-                pair.setRouteNodes(route);
-                pair.setDistance(Math.max(0, route.size() - 1));
+            List<Node> route = pair.getRouteNodes();
+            if (route == null || route.isEmpty()) {
+                continue;
+            }
+            int distance = Math.max(0, route.size() - 1);
+            if (pair.getDistance() != distance || !pair.getTags().contains("StableRoute")) {
+                pair.setDistance(distance);
+                pair.addTag("StableRoute");
+                pair.addTag("LongestRoadPlan");
                 synergyPairService.save(pair);
             }
         }
     }
 
     private List<AdviceDto> saveAdvice(Player me, List<SynergyPair> ranked, Map<Integer, Node> nodeById,
-                                       boolean openingPlacement) {
+                                       boolean openingPlacement, boolean resetRoutes) {
         adviceService.deleteAll();
-        synergyPairService.deleteAll();
+        if (resetRoutes) {
+            synergyPairService.deleteAll();
+        }
 
         List<AdviceDto> result = new ArrayList<>();
         for (int i = 0; i < ranked.size(); i++) {
             SynergyPair pair = ranked.get(i);
-            Node target = pair.getNode1().getOwner() == null ? pair.getNode1() : pair.getNode2();
+            Node target = adviceTarget(pair);
             target = nodeById.get(target.getId());
             if (target == null || pair.getNode2() == null) {
                 continue;
@@ -148,6 +155,29 @@ public class PlacementAdviceService {
         return result;
     }
 
+    private Node adviceTarget(SynergyPair pair) {
+        if (pair.getNode1().getOwner() == null) {
+            return pair.getNode1();
+        }
+        if (pair.getNode2().getOwner() == null) {
+            return pair.getNode2();
+        }
+        List<Node> route = pair.getRouteNodes();
+        if (!route.isEmpty()) {
+            return route.get(route.size() / 2);
+        }
+        return pair.getNode2();
+    }
+
+    private List<SynergyPair> persistedAdviceRoutes(int playerId) {
+        return adviceService.getAll().stream()
+                .filter(advice -> advice.getPlayer() != null && advice.getPlayer().getId() == playerId)
+                .map(Advice::getLongestRoad)
+                .filter(Objects::nonNull)
+                .filter(pair -> pair.getRouteNodes().size() >= 2)
+                .toList();
+    }
+
 
     private boolean belongsToPlayerAdvice(SynergyPair pair, int playerId) {
         return adviceService.getAll().stream()
@@ -157,31 +187,179 @@ public class PlacementAdviceService {
                         && advice.getLongestRoad().getId() == pair.getId());
     }
 
-    private boolean trimOwnedSegments(List<Node> route, List<Edge> edges, int playerId) {
-        boolean changed = false;
-        while (route.size() > 1 && ownedEdge(route.get(0), route.get(1), edges, playerId)) {
-            route.remove(0);
-            changed = true;
-        }
-        while (route.size() > 1 && ownedEdge(route.get(route.size() - 1), route.get(route.size() - 2), edges, playerId)) {
-            route.remove(route.size() - 1);
-            changed = true;
-        }
-        return changed;
-    }
-
-    private boolean ownedEdge(Node first, Node second, List<Edge> edges, int playerId) {
-        return edges.stream().anyMatch(edge -> edge.getOwner() != null
-                && edge.getOwner().getId() == playerId
-                && ((edge.getNode1().getId() == first.getId() && edge.getNode2().getId() == second.getId())
-                || (edge.getNode1().getId() == second.getId() && edge.getNode2().getId() == first.getId())));
-    }
-
     private Comparator<SynergyPair> pairComparator() {
         return Comparator.comparingInt(SynergyPair::getScore).reversed()
                 .thenComparingInt(SynergyPair::getDistance)
                 .thenComparingInt(pair -> pair.getNode1().getId())
                 .thenComparingInt(pair -> pair.getNode2().getId());
+    }
+
+    private List<SynergyPair> stableRouteAdvice(int playerId, List<SynergyPair> persistedRoutes,
+                                                List<SynergyPair> candidates, List<Node> nodes, List<Edge> edges) {
+        List<SynergyPair> rankedCandidates = candidates.stream()
+                .sorted(routeStabilityComparator(playerId, edges))
+                .toList();
+        Set<Integer> ownedSettlements = ownedSettlements(playerId, nodes).stream()
+                .map(Node::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        boolean newSettlementOutsidePlan = !persistedRoutes.isEmpty()
+                && ownedSettlements.stream().anyMatch(nodeId -> persistedRoutes.stream()
+                        .noneMatch(route -> routeContains(route, nodeId)));
+
+        List<SynergyPair> stable = new ArrayList<>();
+        for (SynergyPair persisted : persistedRoutes) {
+            if (stable.size() >= 2 || !routeStillUsable(persisted, playerId, edges)) {
+                continue;
+            }
+            SynergyPair bestMatchingCandidate = rankedCandidates.stream()
+                    .filter(candidate -> sameEndpoints(candidate, persisted))
+                    .findFirst()
+                    .orElse(null);
+            SynergyPair refreshed = bestMatchingCandidate == null
+                    ? refreshPersistedRouteScore(persisted, playerId, edges)
+                    : copyPersistentIdentity(persisted, bestMatchingCandidate);
+            stable.add(refreshed);
+        }
+
+        if (!newSettlementOutsidePlan && stable.size() >= 2) {
+            return stable;
+        }
+
+        int weakestStableScore = stable.stream()
+                .mapToInt(pair -> stablePlanScore(pair, playerId, edges))
+                .min()
+                .orElse(Integer.MIN_VALUE);
+        for (SynergyPair candidate : rankedCandidates) {
+            if (stable.size() >= 2) {
+                break;
+            }
+            if (stable.stream().anyMatch(existing -> sameEndpoints(existing, candidate))) {
+                continue;
+            }
+            stable.add(candidate);
+        }
+        if (newSettlementOutsidePlan || stable.size() < 2) {
+            for (SynergyPair candidate : rankedCandidates) {
+                if (stable.stream().anyMatch(existing -> sameEndpoints(existing, candidate))) {
+                    continue;
+                }
+                int candidateScore = stablePlanScore(candidate, playerId, edges);
+                if (stable.size() < 2 || candidateScore >= weakestStableScore + 35) {
+                    if (stable.size() >= 2) {
+                        stable.sort(routeStabilityComparator(playerId, edges));
+                        stable.remove(stable.size() - 1);
+                    }
+                    stable.add(candidate);
+                    weakestStableScore = stable.stream()
+                            .mapToInt(pair -> stablePlanScore(pair, playerId, edges))
+                            .min()
+                            .orElse(candidateScore);
+                }
+                if (stable.size() >= 2 && !newSettlementOutsidePlan) {
+                    break;
+                }
+            }
+        }
+        return stable.stream()
+                .sorted(routeStabilityComparator(playerId, edges))
+                .limit(2)
+                .toList();
+    }
+
+    private Comparator<SynergyPair> routeStabilityComparator(int playerId, List<Edge> edges) {
+        return Comparator.comparingInt((SynergyPair pair) -> stablePlanScore(pair, playerId, edges)).reversed()
+                .thenComparingInt(SynergyPair::getDistance)
+                .thenComparingInt(pair -> pair.getNode1().getId())
+                .thenComparingInt(pair -> pair.getNode2().getId());
+    }
+
+    private int stablePlanScore(SynergyPair pair, int playerId, List<Edge> edges) {
+        return pair.getScore()
+                + ownedSettlementCount(pair, playerId) * 160
+                + ownedRoadCount(pair, edges, playerId) * 120
+                - missingRoadCount(pair, edges, playerId) * 10;
+    }
+
+    private SynergyPair refreshPersistedRouteScore(SynergyPair pair, int playerId, List<Edge> edges) {
+        pair.setDistance(Math.max(0, pair.getRouteNodes().size() - 1));
+        pair.addTag("StableRoute");
+        pair.addTag("LongestRoadPlan");
+        return pair;
+    }
+
+    private SynergyPair copyPersistentIdentity(SynergyPair persisted, SynergyPair candidate) {
+        persisted.setNode1(candidate.getNode1());
+        persisted.setNode2(candidate.getNode2());
+        persisted.setDistance(candidate.getDistance());
+        persisted.setScore(candidate.getScore());
+        persisted.setRouteNodes(candidate.getRouteNodes());
+        persisted.setCheckPoints(candidate.getCheckPoints());
+        persisted.addTag("StableRoute");
+        persisted.addTag("LongestRoadPlan");
+        return persisted;
+    }
+
+    private boolean routeStillUsable(SynergyPair pair, int playerId, List<Edge> edges) {
+        List<Node> route = pair.getRouteNodes();
+        if (route.size() < 2) {
+            return false;
+        }
+        for (int i = 0; i + 1 < route.size(); i++) {
+            Edge edge = edgeBetween(route.get(i), route.get(i + 1), edges);
+            if (edge == null || (edge.getOwner() != null && edge.getOwner().getId() != playerId)) {
+                return false;
+            }
+        }
+        return ownedSettlementCount(pair, playerId) >= 1;
+    }
+
+    private boolean routeContains(SynergyPair pair, int nodeId) {
+        return pair.getRouteNodes().stream().anyMatch(node -> node.getId() == nodeId);
+    }
+
+    private int ownedSettlementCount(SynergyPair pair, int playerId) {
+        return (int) pair.getRouteNodes().stream()
+                .filter(node -> node.getOwner() != null
+                        && node.getOwner().getId() == playerId
+                        && node.getSettlement() != null)
+                .count();
+    }
+
+    private int ownedRoadCount(SynergyPair pair, List<Edge> edges, int playerId) {
+        List<Node> route = pair.getRouteNodes();
+        int count = 0;
+        for (int i = 0; i + 1 < route.size(); i++) {
+            Edge edge = edgeBetween(route.get(i), route.get(i + 1), edges);
+            if (edge != null && edge.getOwner() != null && edge.getOwner().getId() == playerId) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private int missingRoadCount(SynergyPair pair, List<Edge> edges, int playerId) {
+        List<Node> route = pair.getRouteNodes();
+        int count = 0;
+        for (int i = 0; i + 1 < route.size(); i++) {
+            Edge edge = edgeBetween(route.get(i), route.get(i + 1), edges);
+            if (edge != null && (edge.getOwner() == null || edge.getOwner().getId() != playerId)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private Edge edgeBetween(Node first, Node second, List<Edge> edges) {
+        if (first == null || second == null) {
+            return null;
+        }
+        return edges.stream()
+                .filter(edge -> (edge.getNode1().getId() == first.getId()
+                        && edge.getNode2().getId() == second.getId())
+                        || (edge.getNode1().getId() == second.getId()
+                        && edge.getNode2().getId() == first.getId()))
+                .findFirst()
+                .orElse(null);
     }
 
     private List<SynergyPair> fallbackOpeningSynergyPairs(List<Node> nodes, List<Edge> edges, int mePlayerId) {
@@ -205,9 +383,6 @@ public class PlacementAdviceService {
             if (topPair != null) {
                 preferred.add(topPair);
             }
-        }
-        if (!preferred.isEmpty()) {
-            return preferred;
         }
 
         for (int i = 0; i < legalNodes.size(); i++) {

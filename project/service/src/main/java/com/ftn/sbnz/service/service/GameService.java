@@ -1743,6 +1743,16 @@ public class GameService {
     }
 
     private List<Node> plannedRouteNodes(int playerId) {
+        List<Node> activeAdviceRoute = adviceService.getAll().stream()
+                .filter(advice -> advice.getPlayer() != null && advice.getPlayer().getId() == playerId)
+                .map(com.ftn.sbnz.model.Advice::getLongestRoad)
+                .filter(pair -> pair != null && pair.getRouteNodes() != null && !pair.getRouteNodes().isEmpty())
+                .max(Comparator.comparingInt(SynergyPair::getScore))
+                .map(SynergyPair::getRouteNodes)
+                .orElse(List.of());
+        if (!activeAdviceRoute.isEmpty()) {
+            return activeAdviceRoute;
+        }
         return synergyPairService.getAll().stream()
                 .filter(pair -> pair.getRouteNodes() != null && !pair.getRouteNodes().isEmpty())
                 .filter(pair -> pairBelongsToPlayer(pair, playerId))
